@@ -29,7 +29,7 @@ for (var i = 0; i < E; i++) {
 }
 
 // game loop
-var roundId=-1;
+var roundId = -1;
 //noinspection InfiniteLoopJS
 while (true) {
     roundId++;
@@ -37,7 +37,7 @@ while (true) {
 
     // If there is a gateaway on an adjacent node we close the corresponding edge
     edge = findAdjacentEdgeToGateaway(getNode(SI));
-    if (edge == null){
+    if (edge == null) {
 
         //edge = getRandomEdgeLeadingToAGateaway();
         edge = getBestEdgeToCut(getNode(SI));
@@ -60,25 +60,25 @@ function getRandomEdgeLeadingToAGateaway() {
     return edge;
 }
 
-function computeGateawayWeightForNode(skynetAgentNode,lvl, roundId) {
+function computeGateawayWeightForNode(skynetAgentNode, lvl, roundId) {
     var gateawaysCount = 0;
-    skynetAgentNode.forEachConnectedNode(function(node){
+    skynetAgentNode.forEachConnectedNode(function (node) {
         if (node.visited == roundId) {
             return;
         }
         node.visited = roundId;
-        if(node.isGateaway){
-            gateawaysCount ++;
-        }else{
-            gateawaysCount += computeGateawayWeightForNode(node,roundId);
+        if (node.isGateaway) {
+            gateawaysCount++;
+        } else {
+            gateawaysCount += computeGateawayWeightForNode(node, roundId);
         }
     });
     skynetAgentNode.gateawayCount = gateawaysCount;
 }
 
-function getBestEdgeToCut(skynetAgentNode,roundId){
+function getBestEdgeToCut(skynetAgentNode, roundId) {
     // Need to find a path where there are < branch by edge than gateaway depth
-    computeGateawayWeightForNode(skynetAgentNode,roundId);
+    computeGateawayWeightForNode(skynetAgentNode, roundId);
     debug(skynetAgentNode);
 }
 
@@ -96,7 +96,7 @@ function getNode(N1) {
 function Node(id) {
     //noinspection JSUnusedGlobalSymbols
     this.node = id;
-    this.visited=-1;
+    this.visited = -1;
     this.isGateaway = false;
 
     var edges = [];
@@ -104,12 +104,12 @@ function Node(id) {
         edges.push(edge);
     };
 
-    this.getId = function(){
+    this.getId = function () {
         return id;
     };
 
-    this.removeEdge = function(edge) {
-        edges = edges.reduce(function(acc,currentEdge) {
+    this.removeEdge = function (edge) {
+        edges = edges.reduce(function (acc, currentEdge) {
             if (edge != currentEdge) {
                 acc.push(currentEdge);
             }
@@ -121,14 +121,14 @@ function Node(id) {
         this.isGateaway = value;
     };
 
-    this.forEachConnectedNode = function(callback){
+    this.forEachConnectedNode = function (callback) {
         var that = this;
-        edges.forEach(function(edge){
+        edges.forEach(function (edge) {
             callback(edge.passThrough(that));
         });
     };
 
-    this.getEdges = function() {
+    this.getEdges = function () {
         return edges;
     };
 }
@@ -137,7 +137,7 @@ function Edge(n1, n2) {
     //noinspection JSUnusedGlobalSymbols
     this.edge = n1.getId() + " " + n2.getId();
 
-    this.passThrough = function(nodeFrom){
+    this.passThrough = function (nodeFrom) {
         if (nodeFrom == n1) {
             return n2;
         }
@@ -147,11 +147,11 @@ function Edge(n1, n2) {
         throw "Node unknown " + nodeFrom;
     };
 
-    this.toString = function() {
-        return n1.getId() + ' '+ n2.getId();
+    this.toString = function () {
+        return n1.getId() + ' ' + n2.getId();
     };
 
-    this.close = function() {
+    this.close = function () {
         n1.removeEdge(this);
         n2.removeEdge(this);
     }
@@ -159,11 +159,11 @@ function Edge(n1, n2) {
 
 function findAdjacentEdgeToGateaway(agentNode) {
     var toReturnEdge = null;
-    agentNode.getEdges().forEach(function(edge){
+    agentNode.getEdges().forEach(function (edge) {
         if (toReturnEdge != null) {
             return;
         }
-        if(edge.passThrough(agentNode).isGateaway){
+        if (edge.passThrough(agentNode).isGateaway) {
             toReturnEdge = edge;
         }
     });

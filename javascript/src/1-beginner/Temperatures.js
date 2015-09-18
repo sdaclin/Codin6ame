@@ -6,12 +6,12 @@ printErr(TEMPS);
 
 if (TEMPS == null) {
     print(0);
-}else{
+} else {
     findClosestToZero(N, TEMPS.split(' '))
 }
 
 function findClosestToZero(n, temps) {
-    var result = temps.reduce(function(a,b){
+    var result = temps.reduce(function (a, b) {
         printErr(Math.abs(a) + '|' + Math.abs(b));
         return Math.abs(a) < Math.abs(b) ? a : b;
     })

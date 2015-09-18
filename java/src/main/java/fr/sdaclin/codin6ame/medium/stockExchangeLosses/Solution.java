@@ -29,9 +29,9 @@ class Solution {
         int maxDecote = 0;
         int currentMax = 0;
         for (int i = 0; i < values.length; i++) {
-            if (values[i]< currentMax)
+            if (values[i] < currentMax)
                 continue;
-            if (i>0 && values[i] < values[i-1])
+            if (i > 0 && values[i] < values[i - 1])
                 continue;
             currentMax = values[i];
             for (int j = i; j < values.length; j++) {

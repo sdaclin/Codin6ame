@@ -1,7 +1,9 @@
 package fr.sdaclin.codin6ame.medium.marsLanderLevel2;
 
-import java.util.*;
-import java.io.*;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.util.Scanner;
 
 /**
  * Auto-generated code below aims at helping you parse
@@ -68,7 +70,7 @@ class Player {
     }
 
     private static boolean checkBadDirection(LEM lem, Coordinate landPoint) {
-        return (lem.speed.HS > 0 && lem.distance(landPoint, AXE_X)<0) || (lem.speed.HS < 0 && lem.distance(landPoint, AXE_X)>0);
+        return (lem.speed.HS > 0 && lem.distance(landPoint, AXE_X) < 0) || (lem.speed.HS < 0 && lem.distance(landPoint, AXE_X) > 0);
     }
 
     private static void debug(String s) {
@@ -153,16 +155,16 @@ class Player {
         }
 
         private float distance(Coordinate otherCoordinate) {
-            return  (float) Math.sqrt(
-                    Math.pow(Math.abs((int)this.coordinate.x - (int)otherCoordinate.x),2)
-                            + Math.pow(Math.abs(this.coordinate.y - otherCoordinate.y),2)
+            return (float) Math.sqrt(
+                    Math.pow(Math.abs((int) this.coordinate.x - (int) otherCoordinate.x), 2)
+                            + Math.pow(Math.abs(this.coordinate.y - otherCoordinate.y), 2)
             );
         }
 
-        private float distance(Coordinate otherCoordinate, int axe){
+        private float distance(Coordinate otherCoordinate, int axe) {
             if (axe == AXE_X) {
                 return otherCoordinate.x - this.coordinate.x;
-            }else{
+            } else {
                 return otherCoordinate.y - this.coordinate.y;
             }
         }
@@ -178,7 +180,7 @@ class Player {
         // Speed up and speed down don't change the alt
         public void speedUp(int direction) {
             throttle = 4;
-            angle = (int) Math.toDegrees(Math.cos(GRAVITY/4));
+            angle = (int) Math.toDegrees(Math.cos(GRAVITY / 4));
             if (direction == EST) {
                 angle = angle * -1;
             }
@@ -186,7 +188,7 @@ class Player {
 
         public void speedDown(int curDir) {
             throttle = 4;
-            angle = (int) Math.toDegrees(Math.cos(GRAVITY/4));
+            angle = (int) Math.toDegrees(Math.cos(GRAVITY / 4));
             if (curDir == WEST) {
                 angle = angle * -1;
             }
@@ -199,46 +201,46 @@ class Player {
                     if (speed.HS < 0) { // Bad dir
                         debug("Bad dir");
                         throttle = 4;
-                        angle = -1 * (int) Math.toDegrees(Math.cos(GRAVITY/4));
+                        angle = -1 * (int) Math.toDegrees(Math.cos(GRAVITY / 4));
                         return;
                     }
                     if (Math.abs(speed.HS) > maxSpeed) {
                         debug("Too fast need to slow down");
                         throttle = 4;
-                        angle = (int) Math.toDegrees(Math.cos(GRAVITY/4));
+                        angle = (int) Math.toDegrees(Math.cos(GRAVITY / 4));
                         return;
                     }
-                    if (Math.abs(speed.HS) < minSpeed){
+                    if (Math.abs(speed.HS) < minSpeed) {
                         debug("Too slow need to go faster");
                         throttle = 4;
-                        angle = -1 * (int) Math.toDegrees(Math.cos(GRAVITY/4));
+                        angle = -1 * (int) Math.toDegrees(Math.cos(GRAVITY / 4));
                         return;
                     }
                     debug("Everything is OK");
-                    angle=0;
+                    angle = 0;
                     return;
                 case WEST:
                     debug("Goto WEST");
                     if (speed.HS > 0) { // Bad dir
                         debug("Bad dir");
                         throttle = 4;
-                        angle = (int) Math.toDegrees(Math.cos(GRAVITY/4));
+                        angle = (int) Math.toDegrees(Math.cos(GRAVITY / 4));
                         return;
                     }
                     if (Math.abs(speed.HS) > maxSpeed) {
                         debug("Too fast need to slow down");
                         throttle = 4;
-                        angle = -1 * (int) Math.toDegrees(Math.cos(GRAVITY/4));
+                        angle = -1 * (int) Math.toDegrees(Math.cos(GRAVITY / 4));
                         return;
                     }
-                    if (Math.abs(speed.HS) < minSpeed){
+                    if (Math.abs(speed.HS) < minSpeed) {
                         debug("Too slow need to go faster");
                         throttle = 4;
-                        angle = (int) Math.toDegrees(Math.cos(GRAVITY/4));
+                        angle = (int) Math.toDegrees(Math.cos(GRAVITY / 4));
                         return;
                     }
                     debug("Everything is OK");
-                    angle=0;
+                    angle = 0;
                     return;
             }
 
@@ -247,14 +249,14 @@ class Player {
         public void handleAlt(Coordinate landPoint) {
             if (angle == 0) {
                 debug(String.valueOf(distanceAbs(landPoint, AXE_X)));
-                debug(String.valueOf(distanceAbs(landPoint,AXE_Y)));
-                if (distanceAbs(landPoint, AXE_X) > 500 && distanceAbs(landPoint,AXE_Y) < 1000 && speed.VS < 4) {
+                debug(String.valueOf(distanceAbs(landPoint, AXE_Y)));
+                if (distanceAbs(landPoint, AXE_X) > 500 && distanceAbs(landPoint, AXE_Y) < 1000 && speed.VS < 4) {
                     throttle = 4;
                     return;
                 }
-                if (Math.abs(speed.VS) > 38 ) {
+                if (Math.abs(speed.VS) > 38) {
                     throttle = 4;
-                }else{
+                } else {
                     throttle = 3;
                 }
             }

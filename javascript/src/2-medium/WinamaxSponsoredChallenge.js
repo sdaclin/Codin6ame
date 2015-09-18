@@ -5,31 +5,31 @@ var deckP2 = new Deck();
 var n = parseInt(readline()); // the number of cards for player 1
 for (var i = 0; i < n; i++) {
     var card = cardRegexp.exec(readline());
-    deckP1.addCards([new Card(card[1],card[2])]);
+    deckP1.addCards([new Card(card[1], card[2])]);
 }
 var m = parseInt(readline()); // the number of cards for player 2
 for (var i = 0; i < m; i++) {
     var card = cardRegexp.exec(readline());
-    deckP2.addCards([new Card(card[1],card[2])]);
+    deckP2.addCards([new Card(card[1], card[2])]);
 }
 
-debug (deckP1);
-debug (deckP2);
+debug(deckP1);
+debug(deckP2);
 
-var wargame = new Wargame(deckP1,deckP2);
+var wargame = new Wargame(deckP1, deckP2);
 
 wargame.play();
 
 print(wargame.getResult());
 
-function Wargame(deck1,deck2){
-    this.stepCount=0;
-    this.pat=false;
-    this.battleEngaged=false;
+function Wargame(deck1, deck2) {
+    this.stepCount = 0;
+    this.pat = false;
+    this.battleEngaged = false;
     this.battleCardsP1 = [];
     this.battleCardsP2 = [];
 
-    this.play = function(){
+    this.play = function () {
 
         try {
             while (deck1.size() > 0 && deck2.size() > 0) {
@@ -48,7 +48,7 @@ function Wargame(deck1,deck2){
                     this.battleCardsP2.push(deck2.dealCard(this.battleEngaged));
                     this.battleCardsP2.push(deck2.dealCard(this.battleEngaged));
                     this.battleCardsP2.push(deck2.dealCard(this.battleEngaged));
-                }else if (result > 0) {
+                } else if (result > 0) {
                     this.stepCount++;
                     // player 1 wins
                     deck1.addCards(this.battleCardsP1);
@@ -66,31 +66,31 @@ function Wargame(deck1,deck2){
                     this.battleEngaged = false;
                 }
             }
-        }catch(e){
-            if(e instanceof BattleDrawException){
-                this.pat=true;
+        } catch (e) {
+            if (e instanceof BattleDrawException) {
+                this.pat = true;
             }
         }
     };
 
-    this.getResult = function(){
-        if (this.pat){
+    this.getResult = function () {
+        if (this.pat) {
             return 'PAT';
         }
-        return (deck1.size()>0 ? '1':'2') + ' ' + this.stepCount;
+        return (deck1.size() > 0 ? '1' : '2') + ' ' + this.stepCount;
     };
 }
 
-function BattleDrawException(){
+function BattleDrawException() {
 
 }
 
-function Card(rank,color){
+function Card(rank, color) {
     this.rank = rank;
     this.color = color;
-    var value = parseInt(rank,10);
+    var value = parseInt(rank, 10);
     if (isNaN(value)) {
-        switch(rank){
+        switch (rank) {
             case 'J':
                 value = 11;
                 break;
@@ -108,30 +108,30 @@ function Card(rank,color){
 
     this.value = value;
 
-    this.getValue = function() {
+    this.getValue = function () {
         return value;
     };
 
-    this.compareTo = function(otherCard){
+    this.compareTo = function (otherCard) {
         return value - otherCard.getValue();
     };
 }
 
-function Deck(){
+function Deck() {
     this.cards = [];
 
-    this.size = function(){
+    this.size = function () {
         return this.cards.length;
     };
 
-    this.addCards = function(cards){
+    this.addCards = function (cards) {
         var that = this;
-        cards.forEach(function(cardToAdd){
+        cards.forEach(function (cardToAdd) {
             that.cards.push(cardToAdd);
         })
     };
 
-    this.dealCard = function(battleEngaged){
+    this.dealCard = function (battleEngaged) {
         if (battleEngaged != null && battleEngaged && this.cards.length == 0) {
             throw new BattleDrawException();
         }
@@ -139,6 +139,6 @@ function Deck(){
     };
 }
 
-function debug(value){
+function debug(value) {
     printErr(JSON.stringify(value));
 }

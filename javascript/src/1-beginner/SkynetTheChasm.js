@@ -12,19 +12,19 @@ while (true) {
     printErr('G =>' + G + '\n');
 
 
-    if (S>G+1){
+    if (S > G + 1) {
         print('SLOW');
         continue;
     }
-    if (S<G+1 && X<R) {
+    if (S < G + 1 && X < R) {
         print('SPEED');
         continue;
     }
-    if (X+1==R){
+    if (X + 1 == R) {
         print('JUMP');
         continue;
     }
-    if (X>R){
+    if (X > R) {
         print('SLOW');
         continue;
     }

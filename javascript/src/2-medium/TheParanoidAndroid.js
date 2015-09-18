@@ -8,7 +8,7 @@ var nbTotalClones = parseInt(inputs[5]); // number of generated clones
 var nbAdditionalElevators = parseInt(inputs[6]); // ignore (always zero)
 var nbElevators = parseInt(inputs[7]); // number of elevators
 
-var floorElevator={};
+var floorElevator = {};
 for (var i = 0; i < nbElevators; i++) {
     var inputs = readline().split(' ');
     var elevatorFloor = parseInt(inputs[0]); // floor on which this elevator is found
@@ -26,7 +26,7 @@ while (true) {
     var action;
     if (cloneFloor == exitFloor) {
         action = getActionToGoTo(clonePos, direction, exitPos);
-    }else {
+    } else {
         action = getActionToGoTo(clonePos, direction, floorElevator[cloneFloor]);
     }
 
@@ -38,7 +38,7 @@ while (true) {
 }
 
 function getActionToGoTo(clonePos, direction, destPos) {
-    printErr("getActionToGoTo("+clonePos+","+direction+","+destPos+")");
+    printErr("getActionToGoTo(" + clonePos + "," + direction + "," + destPos + ")");
     var action = new Action("WAIT");
     switch (direction) {
         case "LEFT":
@@ -60,7 +60,7 @@ function Action(action) {
 
     printErr(this.action);
 
-    this.getAction = function() {
+    this.getAction = function () {
         return this.action;
     }
 }

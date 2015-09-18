@@ -1,7 +1,9 @@
 package fr.sdaclin.codin6ame.medium.IndianaLevel1;
 
-import java.util.*;
-import java.io.*;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.util.Scanner;
 
 /**
  * Auto-generated code below aims at helping you parse
