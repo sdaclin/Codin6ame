@@ -22,6 +22,7 @@ const lvlTest = '{"nbFloors":3,"width":10,"nbRounds":6,"exitFloor":2,"exitPos":2
 const lvl1 = '{"nbFloors":2,"width":13,"nbRounds":100,"exitFloor":1,"exitPos":11,"nbTotalClones":10,"nbAdditionalElevators":1,"nbElevators":0,"elevators":[],"marvinStartingState":{"floor":0,"pos":2,"direction":"RIGHT"}}';
 const lvl3 = '{"nbFloors":6,"width":13,"nbRounds":100,"exitFloor":5,"exitPos":10,"nbTotalClones":10,"nbAdditionalElevators":5,"nbElevators":0,"elevators":[],"marvinStartingState":{"floor":0,"pos":1,"direction":"RIGHT"}}';
 const lvl5 = '{"nbFloors":7,"width":13,"nbRounds":30,"exitFloor":6,"exitPos":7,"nbTotalClones":10,"nbAdditionalElevators":3,"nbElevators":3,"elevators":[{"elevatorFloor":2,"elevatorPos":6},{"elevatorFloor":0,"elevatorPos":6},{"elevatorFloor":3,"elevatorPos":7}],"marvinStartingState":{"floor":0,"pos":4,"direction":"RIGHT"}}';
+const lvl6 = '{"nbFloors":10,"width":19,"nbRounds":47,"exitFloor":9,"exitPos":9,"nbTotalClones":41,"nbAdditionalElevators":0,"nbElevators":17,"elevators":[{"elevatorFloor":0,"elevatorPos":9},{"elevatorFloor":5,"elevatorPos":4},{"elevatorFloor":2,"elevatorPos":9},{"elevatorFloor":6,"elevatorPos":9},{"elevatorFloor":0,"elevatorPos":3},{"elevatorFloor":7,"elevatorPos":4},{"elevatorFloor":5,"elevatorPos":17},{"elevatorFloor":3,"elevatorPos":17},{"elevatorFloor":2,"elevatorPos":3},{"elevatorFloor":4,"elevatorPos":9},{"elevatorFloor":8,"elevatorPos":9},{"elevatorFloor":7,"elevatorPos":17},{"elevatorFloor":4,"elevatorPos":3},{"elevatorFloor":1,"elevatorPos":17},{"elevatorFloor":1,"elevatorPos":4},{"elevatorFloor":3,"elevatorPos":4},{"elevatorFloor":6,"elevatorPos":3}],"marvinStartingState":{"floor":0,"pos":6,"direction":"RIGHT"}}';
 
 var configuration = {};
 if (getEnv() == WEB) {
@@ -61,7 +62,7 @@ if (getEnv() == WEB) {
     testAll();
     process.exit();
 } else {
-    configuration = JSON.parse(lvl5);
+    configuration = JSON.parse(lvl6);
 }
 
 var marvin = new Marvin(configuration);
@@ -71,6 +72,7 @@ marvin.printAllActions(stackToGo);
 function Marvin(configuration) {
     var that = this;
     this.startingState = new State(configuration.marvinStartingState.pos, configuration.marvinStartingState.floor, configuration.marvinStartingState.direction, configuration.nbAdditionalElevators);
+    this.alreadyComputedContext = [];
 
     // Init LevelMap
     this.levelMap = new LevelMap(configuration.width, configuration.nbFloors);
@@ -84,47 +86,39 @@ function Marvin(configuration) {
 
     this.computeSolution = function () {
         var stack = []; // stackToGoToExit
-        var alreadyComputedContext = [];
+        this.alreadyComputedContext = [];
         var currentContext = new Context(this.startingState, null);
         var wayToExitIsFound = false;
         while (!wayToExitIsFound) {
-            //debug(stack);
-            if (stack.length > 0) {
-                debug(stack[stack.length - 1]);
-            }
             var that = this;
 
             var currentContent = this.levelMap.getContent(currentContext.state.pos, currentContext.state.floor);
             if (currentContent == MAP_EXIT) {
                 wayToExitIsFound = true;
             } else if (currentContent == MAP_ELEVATOR) {
-                nextAction = ACTION_BUILTIN_ELEVATOR;
-                futureState = this.do(currentContext.state, ACTION_BUILTIN_ELEVATOR);
-                currentContext.setAction(ACTION_BUILTIN_ELEVATOR);
-                stack.push(currentContext);
-                currentContext = new Context(futureState, null);
+                try {
+                    currentContext = this.tryToDo(stack, currentContext, ACTION_BUILTIN_ELEVATOR);
+                } catch (err) {
+                    // Happens when arriving on an already visited context
+                    do {
+                        currentContext = stack.pop();
+                    } while (currentContext.action == ACTION_BUILTIN_ELEVATOR);
+                }
             } else {
                 var nextAction;
                 if ((nextAction = this.nextAction(currentContext)) != null) {
-                    var futureState;
                     try {
-                        futureState = that.do(currentContext.getState(), nextAction);
-                        currentContext.setAction(nextAction);
-                        // Index context and verify if a better context has already been found for this state
-                        if (!this.indexAndCheckState(alreadyComputedContext, futureState)) {
-                            //currentContext = stack.pop();
-                            continue;
-                        }
-                        stack.push(currentContext);
-                        currentContext = new Context(futureState, null);
+                        // todo Optimisation pour vérifier si on a déjà pris ce chemin
+                        currentContext = that.tryToDo(stack, currentContext, nextAction);
                     } catch (err) {
-                        debug('Can\'t do [' + nextAction + '] at [' + currentContext.getState().pos + '][' + currentContext.getState().floor + '][' + currentContext.getState().direction + ']');
-                        currentContext = stack.pop();
+                        // If action can't be done, we note it in current context to be set as tried
+                        currentContext.setAction(nextAction);
                     }
                 } else {
                     // no more action to try
                     do {
                         currentContext = stack.pop();
+                        //debug(currentContext);
                     } while (currentContext.action == ACTION_BUILTIN_ELEVATOR);
                 }
             }
@@ -134,15 +128,46 @@ function Marvin(configuration) {
         return stack;
     };
 
-    this.indexAndCheckState = function (alreadyComputedContext, state) {
-        if (alreadyComputedContext[state.pos] == null) {
-            alreadyComputedContext[state.pos] = [];
+    /**
+     * Stack action sometime count as many actions
+     * @param stack
+     */
+    this.computeStackLength = function(stack){
+        return stack.reduce(function(result,state){
+            switch (state.action) {
+                case ACTION_BUILTIN_ELEVATOR:
+                case ACTION_WAIT:
+                    return result+=1;
+                    break;
+                case ACTION_BLOCK:
+                    return result+=3;
+                    break;
+                case ACTION_ELEVATOR:
+                    return result+=4;
+                    break;
+            }
+        },0);
+    };
+
+    /**
+     * Maintain an index of [state.pos][state.floor][state.direction][nbElevator] => pathLength
+     * @param state
+     * @param pathLength
+     * @returns {boolean} false if for a given state we have already seen an <= pathLength
+     */
+    this.indexAndCheckState = function (state, pathLength) {
+        if (this.alreadyComputedContext[state.pos] == null) {
+            this.alreadyComputedContext[state.pos] = [];
         }
-        if (alreadyComputedContext[state.pos][state.floor] == null) {
-            alreadyComputedContext[state.pos][state.floor] = [];
+        if (this.alreadyComputedContext[state.pos][state.floor] == null) {
+            this.alreadyComputedContext[state.pos][state.floor] = [];
         }
-        if (alreadyComputedContext[state.pos][state.floor][state.direction] == null || alreadyComputedContext[state.pos][state.floor][state.direction] < state.nbAdditionalElevators) {
-            alreadyComputedContext[state.pos][state.floor][state.direction] = state.nbAdditionalElevators;
+        if (this.alreadyComputedContext[state.pos][state.floor][state.direction] == null) {
+            this.alreadyComputedContext[state.pos][state.floor][state.direction] = [];
+        }
+        if (this.alreadyComputedContext[state.pos][state.floor][state.direction][state.nbAdditionalElevators] == null
+            || this.alreadyComputedContext[state.pos][state.floor][state.direction][state.nbAdditionalElevators] > pathLength) {
+            this.alreadyComputedContext[state.pos][state.floor][state.direction][state.nbAdditionalElevators] = pathLength;
             return true;
         } else {
             return false;
@@ -154,25 +179,25 @@ function Marvin(configuration) {
             var state = stack.shift();
             switch (state.action) {
                 case ACTION_BUILTIN_ELEVATOR:
-                    debug('\tBUILTIN_ELEVATOR + 1 wait');
-                    printOut(ACTION_WAIT);
+                    debug('[BUILTIN_ELEVATOR + 1 wait]',true);
+                    printOut(ACTION_WAIT,true);
                     break;
                 case ACTION_WAIT:
-                    debug('\tWAIT');
-                    printOut(ACTION_WAIT);
+                    debug('[WAIT]',true);
+                    printOut(ACTION_WAIT,true);
                     break;
                 case ACTION_BLOCK:
-                    debug('\tBLOCK + 2 wait');
-                    printOut(ACTION_BLOCK);
-                    printOut(ACTION_WAIT);
-                    printOut(ACTION_WAIT);
+                    debug('[BLOCK + 2 wait]',true);
+                    printOut(ACTION_BLOCK,true);
+                    printOut(ACTION_WAIT,true);
+                    printOut(ACTION_WAIT,true);
                     break;
                 case ACTION_ELEVATOR:
-                    debug('\tELEVATOR + 3 Wait');
-                    printOut(ACTION_ELEVATOR);
-                    printOut(ACTION_WAIT);
-                    printOut(ACTION_WAIT);
-                    printOut(ACTION_WAIT);
+                    debug('[ELEVATOR + 3 Wait]',true);
+                    printOut(ACTION_ELEVATOR,true);
+                    printOut(ACTION_WAIT,true);
+                    printOut(ACTION_WAIT,true);
+                    printOut(ACTION_WAIT,true);
                     break;
             }
         }
@@ -196,6 +221,51 @@ function Marvin(configuration) {
             case ACTION_BLOCK :
                 return null;
         }
+    };
+
+    this.tryToDo = function (stack, context, actionToDo) {
+        // Verify if there is enough round remaining
+        if (this.computeStackLength(stack) > configuration.nbRounds) {
+            throw 'No more move to process';
+        }
+
+        var futureState;
+        switch (actionToDo) {
+            case ACTION_WAIT:
+                switch (context.state.direction) {
+                    case DIRECTION_LEFT:
+                        futureState = new State(context.state.pos - 1, context.state.floor, context.state.direction, context.state.nbAdditionalElevators);
+                        break;
+                    case DIRECTION_RIGHT:
+                        futureState = new State(context.state.pos + 1, context.state.floor, context.state.direction, context.state.nbAdditionalElevators);
+                        break;
+                }
+                break;
+            case ACTION_BUILTIN_ELEVATOR:
+                futureState = new State(context.state.pos, context.state.floor + 1, context.state.direction, context.state.nbAdditionalElevators);
+                break;
+            case ACTION_ELEVATOR:
+                futureState = new State(context.state.pos, context.state.floor + 1, context.state.direction, context.state.nbAdditionalElevators - 1);
+                break;
+            case ACTION_BLOCK:
+                futureState = new State(context.state.pos = context.state.direction == DIRECTION_LEFT ? context.state.pos + 2 : context.state.pos - 2, context.state.floor, context.state.direction == DIRECTION_LEFT ? DIRECTION_RIGHT : DIRECTION_LEFT, context.state.nbAdditionalElevators);
+        }
+
+        try {
+            this.levelMap.getContent(futureState.pos, futureState.floor); // Will throw error if illegalPosition
+        } catch (err) {
+            debug('Can\'t do [' + actionToDo + '] at [' + context.state.pos + '][' + context.state.floor + '][' + context.state.direction + ']');
+            throw err;
+        }
+
+        // Index context and verify if a better context has already been found for this state
+        if (!this.indexAndCheckState(futureState, stack.length)) {
+            throw 'We have already try this path';
+        }
+
+        context.setAction(actionToDo);
+        stack.push(context);
+        return new Context(futureState, null);
     };
 
     this.do = function (state, actionToDo) {
@@ -316,8 +386,10 @@ function getEnv() {
     }
 }
 
-function debug(toDebug) {
-    toDebug = JSON.stringify(toDebug);
+function debug(toDebug,simpleText) {
+    if(simpleText == undefined || simpleText == false) {
+        toDebug = JSON.stringify(toDebug);
+    }
     if (getEnv() == SIMU || getEnv() == TEST) {
         console.log(toDebug);
     } else {
@@ -325,10 +397,12 @@ function debug(toDebug) {
     }
 }
 
-function printOut(toPrint) {
+function printOut(toPrint,simpleText) {
     if (getEnv() == SIMU || getEnv() == TEST) {
-        toPrint = JSON.stringify(toPrint);
-        process.stdout.write(toPrint + "\n");
+        if(simpleText == undefined || simpleText == false) {
+            toPrint = JSON.stringify(toPrint);
+        }
+        process.stdout.write("out:"+toPrint + "\n");
     } else {
         print(toPrint);
         var inputs = readline().split(' ');
