@@ -17,12 +17,13 @@ const MAP_START = 'S';
 // #2 |.O........|  Out
 // #1 |.....E....|  Elevator
 // #0 |....S.....|  Start
-const lvlTest = '{"nbFloors":3,"width":10,"nbRounds":6,"exitFloor":2,"exitPos":2,"nbTotalClones":4,"nbAdditionalElevators":1,"nbElevators":1,"elevators":[],"marvinStartingState":{"floor":0,"pos":5,"direction":"RIGHT"}}';
+const lvlTest = '{"nbFloors":3,"width":10,"nbRounds":6,"exitFloor":2,"exitPos":2,"nbTotalClones":4,"nbAdditionalElevators":1,"nbElevators":1,"elevators":[{"elevatorFloor":2,"elevatorPos":6}],"marvinStartingState":{"floor":0,"pos":5,"direction":"RIGHT"}}';
 
 const lvl1 = '{"nbFloors":2,"width":13,"nbRounds":100,"exitFloor":1,"exitPos":11,"nbTotalClones":10,"nbAdditionalElevators":1,"nbElevators":0,"elevators":[],"marvinStartingState":{"floor":0,"pos":2,"direction":"RIGHT"}}';
 const lvl3 = '{"nbFloors":6,"width":13,"nbRounds":100,"exitFloor":5,"exitPos":10,"nbTotalClones":10,"nbAdditionalElevators":5,"nbElevators":0,"elevators":[],"marvinStartingState":{"floor":0,"pos":1,"direction":"RIGHT"}}';
 const lvl5 = '{"nbFloors":7,"width":13,"nbRounds":30,"exitFloor":6,"exitPos":7,"nbTotalClones":10,"nbAdditionalElevators":3,"nbElevators":3,"elevators":[{"elevatorFloor":2,"elevatorPos":6},{"elevatorFloor":0,"elevatorPos":6},{"elevatorFloor":3,"elevatorPos":7}],"marvinStartingState":{"floor":0,"pos":4,"direction":"RIGHT"}}';
 const lvl6 = '{"nbFloors":10,"width":19,"nbRounds":47,"exitFloor":9,"exitPos":9,"nbTotalClones":41,"nbAdditionalElevators":0,"nbElevators":17,"elevators":[{"elevatorFloor":0,"elevatorPos":9},{"elevatorFloor":5,"elevatorPos":4},{"elevatorFloor":2,"elevatorPos":9},{"elevatorFloor":6,"elevatorPos":9},{"elevatorFloor":0,"elevatorPos":3},{"elevatorFloor":7,"elevatorPos":4},{"elevatorFloor":5,"elevatorPos":17},{"elevatorFloor":3,"elevatorPos":17},{"elevatorFloor":2,"elevatorPos":3},{"elevatorFloor":4,"elevatorPos":9},{"elevatorFloor":8,"elevatorPos":9},{"elevatorFloor":7,"elevatorPos":17},{"elevatorFloor":4,"elevatorPos":3},{"elevatorFloor":1,"elevatorPos":17},{"elevatorFloor":1,"elevatorPos":4},{"elevatorFloor":3,"elevatorPos":4},{"elevatorFloor":6,"elevatorPos":3}],"marvinStartingState":{"floor":0,"pos":6,"direction":"RIGHT"}}';
+const lvl8 = '{"nbFloors":13,"width":36,"nbRounds":67,"exitFloor":11,"exitPos":12,"nbTotalClones":41,"nbAdditionalElevators":4,"nbElevators":34,"elevators":[{"elevatorFloor":2,"elevatorPos":34},{"elevatorFloor":5,"elevatorPos":34},{"elevatorFloor":4,"elevatorPos":9},{"elevatorFloor":8,"elevatorPos":23},{"elevatorFloor":0,"elevatorPos":34},{"elevatorFloor":4,"elevatorPos":23},{"elevatorFloor":8,"elevatorPos":1},{"elevatorFloor":10,"elevatorPos":3},{"elevatorFloor":6,"elevatorPos":34},{"elevatorFloor":3,"elevatorPos":17},{"elevatorFloor":4,"elevatorPos":34},{"elevatorFloor":5,"elevatorPos":4},{"elevatorFloor":11,"elevatorPos":13},{"elevatorFloor":7,"elevatorPos":34},{"elevatorFloor":9,"elevatorPos":34},{"elevatorFloor":11,"elevatorPos":11},{"elevatorFloor":1,"elevatorPos":34},{"elevatorFloor":7,"elevatorPos":17},{"elevatorFloor":6,"elevatorPos":13},{"elevatorFloor":1,"elevatorPos":4},{"elevatorFloor":2,"elevatorPos":24},{"elevatorFloor":8,"elevatorPos":9},{"elevatorFloor":1,"elevatorPos":17},{"elevatorFloor":11,"elevatorPos":4},{"elevatorFloor":6,"elevatorPos":22},{"elevatorFloor":1,"elevatorPos":24},{"elevatorFloor":10,"elevatorPos":23},{"elevatorFloor":3,"elevatorPos":34},{"elevatorFloor":9,"elevatorPos":17},{"elevatorFloor":2,"elevatorPos":3},{"elevatorFloor":8,"elevatorPos":34},{"elevatorFloor":2,"elevatorPos":23},{"elevatorFloor":10,"elevatorPos":34},{"elevatorFloor":9,"elevatorPos":2}],"marvinStartingState":{"floor":0,"pos":6,"direction":"RIGHT"}}';
 
 var configuration = {};
 if (getEnv() == WEB) {
@@ -84,13 +85,27 @@ function Marvin(configuration) {
     this.levelMap.setContent(configuration.marvinStartingState.pos, configuration.marvinStartingState.floor, MAP_START);
     this.levelMap.print();
 
+    this.verifyStack = function (stack, startingState, finalState,counter) {
+        var that = this;
+        var currentState = startingState;
+        stack.forEach(function (currentAction) {
+            currentState = that.do(currentState, currentAction.action);
+        });
+        if (currentState.pos != finalState.pos || currentState.floor != finalState.floor || currentState.direction != finalState.direction){
+           debug('Something goes wrong at '+counter);
+        }
+    };
+
     this.computeSolution = function () {
         var stack = []; // stackToGoToExit
         this.alreadyComputedContext = [];
         var currentContext = new Context(this.startingState, null);
         var wayToExitIsFound = false;
+        var counter = 0;
         while (!wayToExitIsFound) {
             var that = this;
+
+            this.verifyStack(stack, this.startingState, currentContext.state, counter++);
 
             var currentContent = this.levelMap.getContent(currentContext.state.pos, currentContext.state.floor);
             if (currentContent == MAP_EXIT) {
@@ -132,21 +147,21 @@ function Marvin(configuration) {
      * Stack action sometime count as many actions
      * @param stack
      */
-    this.computeStackLength = function(stack){
-        return stack.reduce(function(result,state){
+    this.computeStackLength = function (stack) {
+        return stack.reduce(function (result, state) {
             switch (state.action) {
                 case ACTION_BUILTIN_ELEVATOR:
                 case ACTION_WAIT:
-                    return result+=1;
+                    return result += 1;
                     break;
                 case ACTION_BLOCK:
-                    return result+=3;
+                    return result += 3;
                     break;
                 case ACTION_ELEVATOR:
-                    return result+=4;
+                    return result += 4;
                     break;
             }
-        },0);
+        }, 0);
     };
 
     /**
@@ -177,27 +192,28 @@ function Marvin(configuration) {
     this.printAllActions = function (stack) {
         while (stack.length > 0) {
             var state = stack.shift();
+            debug("Prog   Pos " + state.state.floor + ' ' + state.state.pos + ' ' + state.state.direction, true);
             switch (state.action) {
                 case ACTION_BUILTIN_ELEVATOR:
-                    debug('[BUILTIN_ELEVATOR + 1 wait]',true);
-                    printOut(ACTION_WAIT,true);
+                    debug('[BUILTIN_ELEVATOR + 1 wait]', true);
+                    printOut(ACTION_WAIT, true);
                     break;
                 case ACTION_WAIT:
-                    debug('[WAIT]',true);
-                    printOut(ACTION_WAIT,true);
+                    debug('[WAIT]', true);
+                    printOut(ACTION_WAIT, true);
                     break;
                 case ACTION_BLOCK:
-                    debug('[BLOCK + 2 wait]',true);
-                    printOut(ACTION_BLOCK,true);
-                    printOut(ACTION_WAIT,true);
-                    printOut(ACTION_WAIT,true);
+                    debug('[BLOCK + 2 wait]', true);
+                    printOut(ACTION_BLOCK, true);
+                    printOut(ACTION_WAIT, true);
+                    printOut(ACTION_WAIT, true);
                     break;
                 case ACTION_ELEVATOR:
-                    debug('[ELEVATOR + 3 Wait]',true);
-                    printOut(ACTION_ELEVATOR,true);
-                    printOut(ACTION_WAIT,true);
-                    printOut(ACTION_WAIT,true);
-                    printOut(ACTION_WAIT,true);
+                    debug('[ELEVATOR + 3 Wait]', true);
+                    printOut(ACTION_ELEVATOR, true);
+                    printOut(ACTION_WAIT, true);
+                    printOut(ACTION_WAIT, true);
+                    printOut(ACTION_WAIT, true);
                     break;
             }
         }
@@ -216,40 +232,23 @@ function Marvin(configuration) {
             case ACTION_ELEVATOR:
                 return ACTION_WAIT;
             case ACTION_WAIT:
-            case ACTION_BUILTIN_ELEVATOR: // the two are the same because builtin elevator is applied automatically
                 return ACTION_BLOCK;
             case ACTION_BLOCK :
+                return null;
+            case ACTION_BUILTIN_ELEVATOR:
+                printOut('Stucked !!!!');
+                throw 'shouldn\'t happen because BUILTIN ELEVATAR is handle elsewhere';
                 return null;
         }
     };
 
     this.tryToDo = function (stack, context, actionToDo) {
         // Verify if there is enough round remaining
-        if (this.computeStackLength(stack) > configuration.nbRounds) {
+        if (this.computeStackLength(stack) >= configuration.nbRounds) {
             throw 'No more move to process';
         }
 
-        var futureState;
-        switch (actionToDo) {
-            case ACTION_WAIT:
-                switch (context.state.direction) {
-                    case DIRECTION_LEFT:
-                        futureState = new State(context.state.pos - 1, context.state.floor, context.state.direction, context.state.nbAdditionalElevators);
-                        break;
-                    case DIRECTION_RIGHT:
-                        futureState = new State(context.state.pos + 1, context.state.floor, context.state.direction, context.state.nbAdditionalElevators);
-                        break;
-                }
-                break;
-            case ACTION_BUILTIN_ELEVATOR:
-                futureState = new State(context.state.pos, context.state.floor + 1, context.state.direction, context.state.nbAdditionalElevators);
-                break;
-            case ACTION_ELEVATOR:
-                futureState = new State(context.state.pos, context.state.floor + 1, context.state.direction, context.state.nbAdditionalElevators - 1);
-                break;
-            case ACTION_BLOCK:
-                futureState = new State(context.state.pos = context.state.direction == DIRECTION_LEFT ? context.state.pos + 2 : context.state.pos - 2, context.state.floor, context.state.direction == DIRECTION_LEFT ? DIRECTION_RIGHT : DIRECTION_LEFT, context.state.nbAdditionalElevators);
-        }
+        var futureState = this.do(context.state, actionToDo);
 
         try {
             this.levelMap.getContent(futureState.pos, futureState.floor); // Will throw error if illegalPosition
@@ -288,9 +287,8 @@ function Marvin(configuration) {
                 futureState = new State(state.pos, state.floor + 1, state.direction, state.nbAdditionalElevators - 1);
                 break;
             case ACTION_BLOCK:
-                futureState = new State(state.pos = state.direction == DIRECTION_LEFT ? state.pos + 2 : state.pos - 2, state.floor, state.direction == DIRECTION_LEFT ? DIRECTION_RIGHT : DIRECTION_LEFT, state.nbAdditionalElevators);
+                futureState = new State(state.direction == DIRECTION_LEFT ? state.pos + 2 : state.pos - 2, state.floor, state.direction == DIRECTION_LEFT ? DIRECTION_RIGHT : DIRECTION_LEFT, state.nbAdditionalElevators);
         }
-        this.levelMap.getContent(futureState.pos, futureState.floor); // Will throw error if illegalPosition
         return futureState;
     }
 }
@@ -334,42 +332,27 @@ function testAll() {
         beforeTest();
         var marvin;
 
-        var movedMarvin;
-        marvin = new Marvin(configLvlTest, 5, 0, DIRECTION_LEFT);
-        movedMarvin = marvin.do(ACTION_WAIT);
-        assert.equal(movedMarvin.startingState.pos, 4, 'New pos should be 4');
+        var newState;
+        marvin = new Marvin(configLvlTest);
+        marvin.startingState.direction = DIRECTION_LEFT;
+        newState = marvin.do(marvin.startingState, ACTION_WAIT);
+        assert.equal(newState.pos, 4, 'New pos should be 4');
 
-        marvin = new Marvin(configLvlTest, 5, 0, DIRECTION_RIGHT);
-        movedMarvin = marvin.do(ACTION_WAIT);
-        assert.equal(movedMarvin.startingState.pos, 6, 'New pos should be 6');
+        marvin = new Marvin(configLvlTest);
+        marvin.startingState.direction = DIRECTION_RIGHT;
+        newState = marvin.do(marvin.startingState, ACTION_WAIT);
+        assert.equal(newState.pos, 6, 'New pos should be 6');
 
-        marvin = new Marvin(configLvlTest, 5, 0, DIRECTION_RIGHT);
-        movedMarvin = marvin.do(ACTION_ELEVATOR);
-        assert.equal(movedMarvin.startingState.floor, 1, 'New floor should be 1');
+        marvin = new Marvin(configLvlTest);
+        newState = marvin.do(marvin.startingState, ACTION_ELEVATOR);
+        assert.equal(newState.floor, 1, 'New floor should be 1');
 
-        marvin = new Marvin(configLvlTest, 5, 0, DIRECTION_RIGHT);
-        movedMarvin = marvin.do(ACTION_BLOCK);
-        assert.equal(movedMarvin.startingState.direction, DIRECTION_LEFT, 'New direction should be LEFT');
+        marvin = new Marvin(configLvlTest);
+        newState = marvin.do(marvin.startingState, ACTION_BLOCK);
+        assert.equal(newState.direction, DIRECTION_LEFT, 'New direction should be LEFT');
     }
 
     testMove();
-
-    function testInvalidMoves() {
-        beforeTest();
-        var marvin;
-
-        marvin = new Marvin(configLvlTest, 0, 0, DIRECTION_LEFT);
-        assert.throws(function () {
-            marvin.do(ACTION_WAIT)
-        }, /out of bound/, 'An exception should be thrown when marvin try to go out of the floor');
-
-        marvin = new Marvin(configLvlTest, 0, 2, DIRECTION_RIGHT);
-        assert.throws(function () {
-            marvin.do(ACTION_ELEVATOR)
-        }, /out of bound/, 'An exception should be thrown when marvin try to go up when on last floor');
-    }
-
-    testInvalidMoves();
 }
 //endregion Tests
 
@@ -386,8 +369,8 @@ function getEnv() {
     }
 }
 
-function debug(toDebug,simpleText) {
-    if(simpleText == undefined || simpleText == false) {
+function debug(toDebug, simpleText) {
+    if (simpleText == undefined || simpleText == false) {
         toDebug = JSON.stringify(toDebug);
     }
     if (getEnv() == SIMU || getEnv() == TEST) {
@@ -397,19 +380,19 @@ function debug(toDebug,simpleText) {
     }
 }
 
-function printOut(toPrint,simpleText) {
+function printOut(toPrint, simpleText) {
     if (getEnv() == SIMU || getEnv() == TEST) {
-        if(simpleText == undefined || simpleText == false) {
+        if (simpleText == undefined || simpleText == false) {
             toPrint = JSON.stringify(toPrint);
         }
-        process.stdout.write("out:"+toPrint + "\n");
+        process.stdout.write("out:" + toPrint + "\n");
     } else {
         print(toPrint);
         var inputs = readline().split(' ');
         var cloneFloor = parseInt(inputs[0]); // floor of the leading clone
         var clonePos = parseInt(inputs[1]); // position of the leading clone on its floor
         var direction = inputs[2];
-        debug(cloneFloor + ' ' + clonePos + ' ' + direction);
+        debug("CurrentPos " + cloneFloor + ' ' + clonePos + ' ' + direction, true);
     }
 }
 
