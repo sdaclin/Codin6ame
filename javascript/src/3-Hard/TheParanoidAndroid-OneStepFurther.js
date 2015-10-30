@@ -88,8 +88,8 @@ function Marvin(configuration) {
     this.verifyStack = function (stack, startingState, finalState, counter) {
         var that = this;
         var currentState = startingState;
-        stack.forEach(function (currentAction) {
-            currentState = that.do(currentState, currentAction.action);
+        stack.forEach(function (currentAction,currentIndex) {
+            currentState = that.do(currentState, currentAction.action, currentIndex>0 ? stack[currentIndex].action:null);
         });
         if (currentState.getPos() != finalState.getPos() || currentState.getFloor() != finalState.getFloor() || currentState.getDirection() != finalState.getDirection()) {
             debug('Something goes wrong at ' + counter);
@@ -106,11 +106,11 @@ function Marvin(configuration) {
             var that = this;
 
 
-            if (counter == 67) {
-                debug('here');
-            }
+            //if (counter == 67) {
+            //    debug('here');
+            //}
 
-            this.verifyStack(stack, this.startingState, currentContext.state, counter++);
+            //this.verifyStack(stack, this.startingState, currentContext.state, counter++);
 
             var currentContent = this.levelMap.getContent(currentContext.state.getPos(), currentContext.state.getFloor());
             if (currentContent == MAP_EXIT) {
@@ -148,25 +148,32 @@ function Marvin(configuration) {
         return stack;
     };
 
+    this.getMoveCostForAction = function(action){
+        switch (action) {
+            case ACTION_BUILTIN_ELEVATOR:
+            case ACTION_WAIT:
+                return 1;
+                break;
+            case ACTION_BLOCK:
+                return 3;
+                break;
+            case ACTION_ELEVATOR:
+                return 4;
+                break;
+        }
+    }
+
     /**
      * Stack action sometime count as many actions
      * @param stack
+     * @param lastAction that should become part of the stack
      */
-    this.computeStackLength = function (stack) {
-        return stack.reduce(function (result, context) {
-            switch (context.action) {
-                case ACTION_BUILTIN_ELEVATOR:
-                case ACTION_WAIT:
-                    return result += 1;
-                    break;
-                case ACTION_BLOCK:
-                    return result += 3;
-                    break;
-                case ACTION_ELEVATOR:
-                    return result += 4;
-                    break;
-            }
+    this.computeStackLength = function (stack, lastAction) {
+        var that = this;
+        var stackLength = stack.reduce(function (result, context) {
+            return result + that.getMoveCostForAction(context.action);
         }, 0);
+        return stackLength + this.getMoveCostForAction(lastAction);
     };
 
     /**
@@ -253,7 +260,7 @@ function Marvin(configuration) {
 
     this.tryToDo = function (stack, context, actionToDo) {
         // Verify if there is enough round remaining
-        if (this.computeStackLength(stack) >= configuration.nbRounds) {
+        if (this.computeStackLength(stack, actionToDo) >= configuration.nbRounds) {
             throw 'No more move to process';
         }
 
@@ -401,7 +408,7 @@ function debug(toDebug, simpleText) {
     if (getEnv() == SIMU || getEnv() == TEST) {
         console.log(toDebug);
     } else {
-        printErr(toDebug);
+        //printErr(toDebug);
     }
 }
 
