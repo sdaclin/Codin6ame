@@ -82,17 +82,17 @@ function Marvin(configuration) {
 
     });
     this.levelMap.setContent(configuration.exitPos, configuration.exitFloor, MAP_EXIT);
-    this.levelMap.setContent(configuration.marvinStartingState.pos, configuration.marvinStartingState.floor, MAP_START);
+    this.levelMap.setContent(this.startingState.getPos(), this.startingState.getFloor(), MAP_START);
     this.levelMap.print();
 
-    this.verifyStack = function (stack, startingState, finalState,counter) {
+    this.verifyStack = function (stack, startingState, finalState, counter) {
         var that = this;
         var currentState = startingState;
         stack.forEach(function (currentAction) {
             currentState = that.do(currentState, currentAction.action);
         });
-        if (currentState.pos != finalState.pos || currentState.floor != finalState.floor || currentState.direction != finalState.direction){
-           debug('Something goes wrong at '+counter);
+        if (currentState.getPos() != finalState.getPos() || currentState.getFloor() != finalState.getFloor() || currentState.getDirection() != finalState.getDirection()) {
+            debug('Something goes wrong at ' + counter);
         }
     };
 
@@ -105,9 +105,14 @@ function Marvin(configuration) {
         while (!wayToExitIsFound) {
             var that = this;
 
+
+            if (counter == 67) {
+                debug('here');
+            }
+
             this.verifyStack(stack, this.startingState, currentContext.state, counter++);
 
-            var currentContent = this.levelMap.getContent(currentContext.state.pos, currentContext.state.floor);
+            var currentContent = this.levelMap.getContent(currentContext.state.getPos(), currentContext.state.getFloor());
             if (currentContent == MAP_EXIT) {
                 wayToExitIsFound = true;
             } else if (currentContent == MAP_ELEVATOR) {
@@ -123,7 +128,7 @@ function Marvin(configuration) {
                 var nextAction;
                 if ((nextAction = this.nextAction(currentContext)) != null) {
                     try {
-                        // todo Optimisation pour vérifier si on a déjà pris ce chemin
+                        // todo Optimisation pour vï¿½rifier si on a dï¿½jï¿½ pris ce chemin
                         currentContext = that.tryToDo(stack, currentContext, nextAction);
                     } catch (err) {
                         // If action can't be done, we note it in current context to be set as tried
@@ -148,8 +153,8 @@ function Marvin(configuration) {
      * @param stack
      */
     this.computeStackLength = function (stack) {
-        return stack.reduce(function (result, state) {
-            switch (state.action) {
+        return stack.reduce(function (result, context) {
+            switch (context.action) {
                 case ACTION_BUILTIN_ELEVATOR:
                 case ACTION_WAIT:
                     return result += 1;
@@ -165,24 +170,24 @@ function Marvin(configuration) {
     };
 
     /**
-     * Maintain an index of [state.pos][state.floor][state.direction][nbElevator] => pathLength
+     * Maintain an index of [state.getPos()][state.getFloor()][state.getDirection()][nbElevator] => pathLength
      * @param state
      * @param pathLength
      * @returns {boolean} false if for a given state we have already seen an <= pathLength
      */
     this.indexAndCheckState = function (state, pathLength) {
-        if (this.alreadyComputedContext[state.pos] == null) {
-            this.alreadyComputedContext[state.pos] = [];
+        if (this.alreadyComputedContext[state.getPos()] == null) {
+            this.alreadyComputedContext[state.getPos()] = [];
         }
-        if (this.alreadyComputedContext[state.pos][state.floor] == null) {
-            this.alreadyComputedContext[state.pos][state.floor] = [];
+        if (this.alreadyComputedContext[state.getPos()][state.getFloor()] == null) {
+            this.alreadyComputedContext[state.getPos()][state.getFloor()] = [];
         }
-        if (this.alreadyComputedContext[state.pos][state.floor][state.direction] == null) {
-            this.alreadyComputedContext[state.pos][state.floor][state.direction] = [];
+        if (this.alreadyComputedContext[state.getPos()][state.getFloor()][state.getDirection()] == null) {
+            this.alreadyComputedContext[state.getPos()][state.getFloor()][state.getDirection()] = [];
         }
-        if (this.alreadyComputedContext[state.pos][state.floor][state.direction][state.nbAdditionalElevators] == null
-            || this.alreadyComputedContext[state.pos][state.floor][state.direction][state.nbAdditionalElevators] > pathLength) {
-            this.alreadyComputedContext[state.pos][state.floor][state.direction][state.nbAdditionalElevators] = pathLength;
+        if (this.alreadyComputedContext[state.getPos()][state.getFloor()][state.getDirection()][state.getNbAdditionalElevators()] == null
+            || this.alreadyComputedContext[state.getPos()][state.getFloor()][state.getDirection()][state.getNbAdditionalElevators()] > pathLength) {
+            this.alreadyComputedContext[state.getPos()][state.getFloor()][state.getDirection()][state.getNbAdditionalElevators()] = pathLength;
             return true;
         } else {
             return false;
@@ -192,10 +197,10 @@ function Marvin(configuration) {
     this.printAllActions = function (stack) {
         while (stack.length > 0) {
             var state = stack.shift();
-            debug("Prog   Pos " + state.state.floor + ' ' + state.state.pos + ' ' + state.state.direction, true);
+            debug("Prog   Pos " + state.state.getFloor() + ' ' + state.state.getPos() + ' ' + state.state.getDirection(), true);
             switch (state.action) {
                 case ACTION_BUILTIN_ELEVATOR:
-                    debug('[BUILTIN_ELEVATOR + 1 wait]', true);
+                    debug('[BUILTIN_ELEVATOR]', true);
                     printOut(ACTION_WAIT, true);
                     break;
                 case ACTION_WAIT:
@@ -226,7 +231,7 @@ function Marvin(configuration) {
         //noinspection FallThroughInSwitchStatementJS
         switch (currentContext.action) {
             case null:
-                if (currentContext.state.nbAdditionalElevators > 0) {
+                if (currentContext.state.getNbAdditionalElevators() > 0) {
                     return ACTION_ELEVATOR;
                 }
             case ACTION_ELEVATOR:
@@ -242,18 +247,26 @@ function Marvin(configuration) {
         }
     };
 
+    this.getPreviousAction = function (stack) {
+        return stack.length == 0 ? null : stack[stack.length - 1].action;
+    };
+
     this.tryToDo = function (stack, context, actionToDo) {
         // Verify if there is enough round remaining
         if (this.computeStackLength(stack) >= configuration.nbRounds) {
             throw 'No more move to process';
         }
 
-        var futureState = this.do(context.state, actionToDo);
+        try {
+            var futureState = this.do(context.state, actionToDo, this.getPreviousAction(stack));
+        } catch (err) {
+            debug(err);
+        }
 
         try {
-            this.levelMap.getContent(futureState.pos, futureState.floor); // Will throw error if illegalPosition
+            this.levelMap.getContent(futureState.getPos(), futureState.getFloor()); // Will throw error if illegalPosition
         } catch (err) {
-            debug('Can\'t do [' + actionToDo + '] at [' + context.state.pos + '][' + context.state.floor + '][' + context.state.direction + ']');
+            debug('Can\'t do [' + actionToDo + '] at [' + context.state.getPos() + '][' + context.state.getFloor() + '][' + context.state.getDirection() + ']');
             throw err;
         }
 
@@ -267,37 +280,49 @@ function Marvin(configuration) {
         return new Context(futureState, null);
     };
 
-    this.do = function (state, actionToDo) {
+    this.do = function (state, actionToDo, previousAction) {
         var futureState;
         switch (actionToDo) {
             case ACTION_WAIT:
-                switch (state.direction) {
+                switch (state.getDirection()) {
                     case DIRECTION_LEFT:
-                        futureState = new State(state.pos - 1, state.floor, state.direction, state.nbAdditionalElevators);
+                        futureState = new State(state.getPos() - 1, state.getFloor(), state.getDirection(), state.getNbAdditionalElevators());
                         break;
                     case DIRECTION_RIGHT:
-                        futureState = new State(state.pos + 1, state.floor, state.direction, state.nbAdditionalElevators);
+                        futureState = new State(state.getPos() + 1, state.getFloor(), state.getDirection(), state.getNbAdditionalElevators());
                         break;
                 }
                 break;
             case ACTION_BUILTIN_ELEVATOR:
-                futureState = new State(state.pos, state.floor + 1, state.direction, state.nbAdditionalElevators);
+                futureState = new State(state.getPos(), state.getFloor() + 1, state.getDirection(), state.getNbAdditionalElevators());
                 break;
             case ACTION_ELEVATOR:
-                futureState = new State(state.pos, state.floor + 1, state.direction, state.nbAdditionalElevators - 1);
+                futureState = new State(state.getPos(), state.getFloor() + 1, state.getDirection(), state.getNbAdditionalElevators() - 1);
                 break;
             case ACTION_BLOCK:
-                futureState = new State(state.direction == DIRECTION_LEFT ? state.pos + 2 : state.pos - 2, state.floor, state.direction == DIRECTION_LEFT ? DIRECTION_RIGHT : DIRECTION_LEFT, state.nbAdditionalElevators);
+                var newPos = (previousAction == ACTION_BUILTIN_ELEVATOR || previousAction == ACTION_ELEVATOR) ? state.getPos() : state.getDirection() == DIRECTION_LEFT ? state.getPos() + 2 : state.getPos() - 2;
+                futureState = new State(newPos, state.getFloor(), state.getDirection() == DIRECTION_LEFT ? DIRECTION_RIGHT : DIRECTION_LEFT, state.getNbAdditionalElevators());
         }
         return futureState;
     }
 }
 
 function State(pos, floor, direction, nbAdditionalElevators) {
-    this.pos = pos;
-    this.floor = floor;
-    this.direction = direction;
-    this.nbAdditionalElevators = nbAdditionalElevators;
+    return {
+        representationStr : '['+pos+']['+floor+']['+direction+']['+nbAdditionalElevators+']',
+        getPos: function () {
+            return pos;
+        },
+        getFloor: function () {
+            return floor;
+        },
+        getDirection: function () {
+            return direction;
+        },
+        getNbAdditionalElevators: function () {
+            return nbAdditionalElevators;
+        }
+    };
 }
 
 function Context(state, action) {
@@ -334,22 +359,22 @@ function testAll() {
 
         var newState;
         marvin = new Marvin(configLvlTest);
-        marvin.startingState.direction = DIRECTION_LEFT;
+        marvin.startingState = new State(5,0, DIRECTION_LEFT,0);
         newState = marvin.do(marvin.startingState, ACTION_WAIT);
-        assert.equal(newState.pos, 4, 'New pos should be 4');
+        assert.equal(newState.getPos(), 4, 'New pos should be 4');
 
         marvin = new Marvin(configLvlTest);
-        marvin.startingState.direction = DIRECTION_RIGHT;
+        marvin.startingState = new State(5,0, DIRECTION_RIGHT,0);
         newState = marvin.do(marvin.startingState, ACTION_WAIT);
-        assert.equal(newState.pos, 6, 'New pos should be 6');
+        assert.equal(newState.getPos(), 6, 'New pos should be 6');
 
         marvin = new Marvin(configLvlTest);
         newState = marvin.do(marvin.startingState, ACTION_ELEVATOR);
-        assert.equal(newState.floor, 1, 'New floor should be 1');
+        assert.equal(newState.getFloor(), 1, 'New floor should be 1');
 
         marvin = new Marvin(configLvlTest);
         newState = marvin.do(marvin.startingState, ACTION_BLOCK);
-        assert.equal(newState.direction, DIRECTION_LEFT, 'New direction should be LEFT');
+        assert.equal(newState.getDirection(), DIRECTION_LEFT, 'New direction should be LEFT');
     }
 
     testMove();
