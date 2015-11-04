@@ -1,4 +1,4 @@
-package fr.sdaclin.codin6ame.hard.APUImprovementPhase;
+package fr.sdaclin.codin9ame.hard.APUImprovementPhase;
 
 import org.testng.annotations.Test;
 

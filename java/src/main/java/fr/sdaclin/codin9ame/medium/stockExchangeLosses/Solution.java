@@ -1,4 +1,4 @@
-package fr.sdaclin.codin6ame.medium.stockExchangeLosses;
+package fr.sdaclin.codin9ame.medium.stockExchangeLosses;
 
 import java.io.InputStream;
 import java.io.OutputStream;

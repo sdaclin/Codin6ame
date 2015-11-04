@@ -1,4 +1,4 @@
-package fr.sdaclin.codin6ame.medium.IndianaLevel1;
+package fr.sdaclin.codin9ame.medium.IndianaLevel1;
 
 import java.io.InputStream;
 import java.io.OutputStream;

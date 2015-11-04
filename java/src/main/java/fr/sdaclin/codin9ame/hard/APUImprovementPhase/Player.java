@@ -1,4 +1,4 @@
-package fr.sdaclin.codin6ame.hard.APUImprovementPhase;
+package fr.sdaclin.codin9ame.hard.APUImprovementPhase;
 
 import javax.script.ScriptException;
 import java.util.ArrayList;
