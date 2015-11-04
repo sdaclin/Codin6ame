@@ -1,10 +1,13 @@
 package fr.sdaclin.codin6ame.hard.APUImprovementPhase;
 
 import javax.script.ScriptException;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
+import java.util.stream.Collectors;
+
+import static java.util.Collections.singletonList;
 
 /**
  * The machines are gaining ground. Time to show them what we're really made of...
@@ -12,7 +15,7 @@ import java.util.Scanner;
 class Player {
 
     public static void main(String args[]) throws ScriptException {
-        PrintStream out = new PrintStream(System.out);
+        //PrintStream out = new PrintStream(System.out);
         Scanner in = new Scanner(System.in);
         Configuration configuration;
 
@@ -36,33 +39,86 @@ class Player {
     /**
      * The most interesting part
      */
-    public static class Solver {
-
+    static class Solver {
         private final List<Node> nodes;
+        private final List<Connexion> connexions = new ArrayList<>();
+        private Map<Integer, List<Node>> nodesBySize;
+        private List<Node> nodesToConnect;
 
         Solver(Configuration configuration) {
             nodes = readNodes(configuration);
         }
 
-        void solve() {
-            List<Node> unconnectedNodes = new ArrayList<>(nodes);
+        List<Connexion> solve() {
+            nodesToConnect = new ArrayList<>(nodes);
+            nodesBySize = nodes.stream().collect(Collectors.groupingBy(Node::getWeightToppedTo3));
 
 
-            List<Connexion> stack = new ArrayList<>();
             boolean solutionIsFound = false;
+            mainLoop:
             while (!solutionIsFound) {
-                if (context.getUnconnectedNode().size() == 0) {
-                    solutionIsFound = true;
-                }
-
-                // Try to connect
+                // Take the first not fully connected node
+                Node currentNode;
                 try {
-                    Context newContext = tryToEstablishAValidConnexion(context);
-                } catch (NoValidConnexionExists) {
-                    context = stack.remove(stack.size());
-                    context = context.nextContextToTry();
+                    currentNode = nodesToConnect.remove(0);
+                } catch (IndexOutOfBoundsException iobe) {
+                    solutionIsFound = true;
+                    continue;
+                }
+                nodesBySize.get(currentNode.getWeight()).remove(currentNode);
+                // Find the max weight of connexion to test
+                for (int connexionThickness = currentNode.getWeightToppedTo3(); connexionThickness > 0; connexionThickness--) {
+                    // Create a new connexion with the next not connected node
+                    Node otherNode;
+                    try {
+                        otherNode = nodesBySize.get(connexionThickness).remove(0);
+                    } catch (IndexOutOfBoundsException iobe) {
+                        continue;
+                    }
+                    Connexion connexion;
+                    try {
+                        connexion = connect(currentNode, otherNode, connexionThickness);
+                    } catch (IntersectionException ie) {
+                        if (connexionThickness > 1) {
+                            continue;
+                        } else {
+                            throw new RuntimeException("not implemented yet");
+                        }
+                    }
+
+                    connexions.add(connexion);
+
+                    try {
+                        nodesBySize.get(currentNode.getWeight()).add(currentNode);
+                    } catch (NullPointerException npe) {
+                        nodesBySize.put(currentNode.getWeight(), new ArrayList<>(singletonList(currentNode)));
+                    }
+                    try {
+                        nodesBySize.get(otherNode.getWeight()).add(otherNode);
+                    } catch (NullPointerException npe) {
+                        nodesBySize.put(otherNode.getWeight(), new ArrayList<>(singletonList(otherNode)));
+                    }
+                    if (currentNode.getWeight() != 0) {
+                        nodesToConnect.add(0, currentNode);
+                    }
+                    continue mainLoop;
+                }
+                // Something goes wrong no connexion can be added
+
+            }
+            return connexions;
+        }
+
+        private Connexion connect(Node currentNode, Node otherNode, int connexionThickness) throws IntersectionException {
+            Connexion connexion = new Connexion(currentNode, otherNode, connexionThickness);
+            for (Connexion otherConnexion : connexions) {
+                if (intersects(connexion, otherConnexion)) {
+                    throw new IntersectionException();
                 }
             }
+            currentNode.minus(connexionThickness);
+            otherNode.minus(connexionThickness);
+            return connexion;
         }
 
         private List<Node> readNodes(Configuration configuration) {
@@ -113,25 +169,13 @@ class Player {
         }
 
 
-        private static class Line {
-            private Coordinate a;
-            private Coordinate b;
+        private interface Line {
+            Coordinate getA();
 
-            Line(Coordinate a, Coordinate b) {
-                this.a = a;
-                this.b = b;
-            }
-
-            public Coordinate getA() {
-                return a;
-            }
-
-            public Coordinate getB() {
-                return b;
-            }
+            Coordinate getB();
         }
 
-        private static class Coordinate {
+        private static class Coordinate implements Comparable<Coordinate> {
             private final int x;
             private final int y;
 
@@ -155,35 +199,93 @@ class Player {
             public int getY() {
                 return x;
             }
+
+            @Override
+            public int compareTo(Coordinate o) {
+                if (x < o.x) {
+                    return -1;
+                } else if (x > o.x) {
+                    return +1;
+                } else {
+                    if (y < o.y) {
+                        return -1;
+                    }
+                    if (y > o.y) {
+                        return +1;
+                    }
+                    return 0;
+                }
+            }
         }
 
-        private static class Node {
-            private final Coordinate coordinate;
-            private final int value;
+        static class Connexion implements Line {
+            private final Node nodeA;
+            private final Node nodeB;
+            private final int thickness;
 
-            public Node(Coordinate coordinate, int value) {
-
-                this.coordinate = coordinate;
-                this.value = value;
+            public Connexion(Node nodeA, Node nodeB, int thickness) {
+                this.nodeA = nodeA;
+                this.nodeB = nodeB;
+                this.thickness = thickness;
             }
 
             @Override
-            public String toString() {
-                return "Node{" +
-                        coordinate +
-                        ", " + value +
-                        '}';
-            }
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (o == null || getClass() != o.getClass()) return false;
 
-            private class Connexion {
+                Connexion connexion = (Connexion) o;
 
-                public Connexion(Node a, Node b, int edgeThickness) {
-
-                }
-
+                if (!nodeA.equals(connexion.nodeA)) return false;
+                return nodeB.equals(connexion.nodeB);
 
             }
 
+            @Override
+            public int hashCode() {
+                int result = nodeA.hashCode();
+                result = 31 * result + nodeB.hashCode();
+                return result;
+            }
+
+            @Override
+            public Coordinate getA() {
+                return nodeA.coordinate;
+            }
+
+            @Override
+            public Coordinate getB() {
+                return nodeB.coordinate;
+            }
+        }
+
+        static class Node {
+            private final Coordinate coordinate;
+            private int weight;
+
+            public Node(Coordinate coordinate, int weight) {
+                this.coordinate = coordinate;
+                this.weight = weight;
+            }
+
+            public int getWeight() {
+                return weight;
+            }
+
+            public int getWeightToppedTo3() {
+                return weight > 3 ? 3 : weight;
+            }
+
+            public void minus(int connexionThickness) {
+                this.weight -= connexionThickness;
+            }
+
+            public void plus(int connexionThickness) {
+                this.weight += connexionThickness;
+            }
+        }
+
+        private class IntersectionException extends Exception {
         }
     }
 
