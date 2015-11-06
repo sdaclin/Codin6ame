@@ -7,8 +7,6 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singletonList;
-
 /**
  * The machines are gaining ground. Time to show them what we're really made of...
  **/
@@ -41,84 +39,93 @@ class Player {
      */
     static class Solver {
         private final List<Node> nodes;
-        private final List<Connexion> connexions = new ArrayList<>();
+        private final List<Connection> connections = new ArrayList<>();
         private Map<Integer, List<Node>> nodesBySize;
-        private List<Node> nodesToConnect;
+        private List<Node> unconnectedNodes;
 
         Solver(Configuration configuration) {
             nodes = readNodes(configuration);
         }
 
-        List<Connexion> solve() {
-            nodesToConnect = new ArrayList<>(nodes);
-            nodesBySize = nodes.stream().collect(Collectors.groupingBy(Node::getWeightToppedTo3));
+        List<Connection> solve() {
+            initNodeBySize();
+            unconnectedNodes = new ArrayList<>(nodes);
+            List<Context> contexts = new ArrayList<>();
 
-
-            boolean solutionIsFound = false;
+            Context context = new Context(peakNextUnconnectedNode());
             mainLoop:
-            while (!solutionIsFound) {
-                // Take the first not fully connected node
-                Node currentNode;
-                try {
-                    currentNode = nodesToConnect.remove(0);
-                } catch (IndexOutOfBoundsException iobe) {
-                    solutionIsFound = true;
-                    continue;
-                }
-                nodesBySize.get(currentNode.getWeight()).remove(currentNode);
-                // Find the max weight of connexion to test
-                for (int connexionThickness = currentNode.getWeightToppedTo3(); connexionThickness > 0; connexionThickness--) {
-                    // Create a new connexion with the next not connected node
-                    Node otherNode;
-                    try {
-                        otherNode = nodesBySize.get(connexionThickness).remove(0);
-                    } catch (IndexOutOfBoundsException iobe) {
-                        continue;
-                    }
-                    Connexion connexion;
-                    try {
-                        connexion = connect(currentNode, otherNode, connexionThickness);
-                    } catch (IntersectionException ie) {
-                        if (connexionThickness > 1) {
-                            continue;
-                        } else {
-                            throw new RuntimeException("not implemented yet");
+            while (unconnectedNodes.size() > 0) {
+
+                // Try to find a node to connect with
+                loopOtherNode:
+                for (int i = context.getOtherNodeIndex(); i < unconnectedNodes.size(); i++) {
+                    for (int j = context.getConnexionWeight(); j > 0; j--) {
+                        Connection connection;
+                        try {
+                            connection = connect(context.getCurrentNode(), unconnectedNodes.get(context.getOtherNodeIndex()), context.getConnexionWeight());
+                            if(unconnectedNodes.size()==0){
+                                return connections;
+                            }
+                        } catch (IntersectionException e) {
+                            continue loopOtherNode;
                         }
+                        context.setCurrentState(connection,i,j);
+                        contexts.add(context);
+                        context = new Context(peakNextUnconnectedNode());
+                        continue mainLoop;
                     }
-
-                    connexions.add(connexion);
-
-                    try {
-                        nodesBySize.get(currentNode.getWeight()).add(currentNode);
-                    } catch (NullPointerException npe) {
-                        nodesBySize.put(currentNode.getWeight(), new ArrayList<>(singletonList(currentNode)));
-                    }
-                    try {
-                        nodesBySize.get(otherNode.getWeight()).add(otherNode);
-                    } catch (NullPointerException npe) {
-                        nodesBySize.put(otherNode.getWeight(), new ArrayList<>(singletonList(otherNode)));
-                    }
-                    if (currentNode.getWeight() != 0) {
-                        nodesToConnect.add(0, currentNode);
-                    }
-                    continue mainLoop;
                 }
-                // Something goes wrong no connexion can be added
-
+                context = contexts.remove(contexts.size()-1);
+                disconnect(context.connection);
             }
-            return connexions;
+            return connections;
         }
 
-        private Connexion connect(Node currentNode, Node otherNode, int connexionThickness) throws IntersectionException {
-            Connexion connexion = new Connexion(currentNode, otherNode, connexionThickness);
-            for (Connexion otherConnexion : connexions) {
-                if (intersects(connexion, otherConnexion)) {
+        private void disconnect(Connection connection) {
+            throw new RuntimeException("not implemented yet");
+        }
+
+        private void initNodeBySize() {
+            nodesBySize = nodes.stream().collect(Collectors.groupingBy(Node::getWeightToppedTo3));
+            if (nodesBySize.get(0) == null) {
+                nodesBySize.put(0, new ArrayList<>());
+            }
+            if (nodesBySize.get(1) == null) {
+                nodesBySize.put(1, new ArrayList<>());
+            }
+            if (nodesBySize.get(2) == null) {
+                nodesBySize.put(2, new ArrayList<>());
+            }
+            if (nodesBySize.get(3) == null) {
+                nodesBySize.put(3, new ArrayList<>());
+            }
+        }
+
+        private Node peakNextUnconnectedNode() {
+            return unconnectedNodes.remove(0);
+        }
+
+        private Connection connect(Node currentNode, Node otherNode, int connexionThickness) throws IntersectionException {
+            Connection connection = new Connection(currentNode, otherNode, connexionThickness);
+            for (Connection otherConnection : connections) {
+                if (    (connection.getA() != otherConnection.getA()
+                        && connection.getA() != otherConnection.getB()
+                        && connection.getB() != otherConnection.getA()
+                        && connection.getB() != otherConnection.getB())
+                        && intersects(connection, otherConnection)) {
                     throw new IntersectionException();
                 }
             }
             currentNode.minus(connexionThickness);
+            if(currentNode.weight>0){
+                unconnectedNodes.add(currentNode);
+            }
             otherNode.minus(connexionThickness);
-            return connexion;
+            if(otherNode.weight==0){
+                unconnectedNodes.remove(otherNode);
+            }
+            connections.add(connection);
+            return connection;
         }
 
         private List<Node> readNodes(Configuration configuration) {
@@ -131,7 +138,7 @@ class Player {
                     if (cellContent.equals(".")) {
                         continue;
                     }
-                    Node node = new Node(new Coordinate(j, i), Integer.parseInt(cellContent, 10));
+                    Node node = new Node(new Coordinate(i, j), Integer.parseInt(cellContent, 10));
                     nodes.add(node);
                 }
             }
@@ -139,10 +146,13 @@ class Player {
         }
 
         void printResult() {
-            solve();
+            List<Connection> connections = solve();
             // Write an action using System.out.println()
             // To debug: System.err.println("Debug messages...");
-            System.out.println("0 0 2 0 1"); // Two coordinates and one integer: x node, one of its neighbors, the number of links connecting them.
+            connections.stream().forEach(connection -> {
+                System.out.println(connection.getA().getX() + " " + connection.getA().getY() + " " + connection.getB().getX() + " " + connection.getB().getY() + " " + connection.getThickness());
+            });
+            //System.out.println("0 0 2 0 1"); // Two coordinates and one integer: x node, one of its neighbors, the number of links connecting them.
         }
 
         boolean intersects(Line lineA, Line lineB) {
@@ -218,12 +228,12 @@ class Player {
             }
         }
 
-        static class Connexion implements Line {
+        static class Connection implements Line {
             private final Node nodeA;
             private final Node nodeB;
             private final int thickness;
 
-            public Connexion(Node nodeA, Node nodeB, int thickness) {
+            public Connection(Node nodeA, Node nodeB, int thickness) {
                 this.nodeA = nodeA;
                 this.nodeB = nodeB;
                 this.thickness = thickness;
@@ -234,10 +244,10 @@ class Player {
                 if (this == o) return true;
                 if (o == null || getClass() != o.getClass()) return false;
 
-                Connexion connexion = (Connexion) o;
+                Connection connection = (Connection) o;
 
-                if (!nodeA.equals(connexion.nodeA)) return false;
-                return nodeB.equals(connexion.nodeB);
+                if (!nodeA.equals(connection.nodeA)) return false;
+                return nodeB.equals(connection.nodeB);
 
             }
 
@@ -256,6 +266,10 @@ class Player {
             @Override
             public Coordinate getB() {
                 return nodeB.coordinate;
+            }
+
+            public int getThickness() {
+                return thickness;
             }
         }
 
@@ -286,6 +300,41 @@ class Player {
         }
 
         private class IntersectionException extends Exception {
+        }
+
+        private class Context {
+            private final Node currentNode;
+            private int connexionWeight;
+            private Connection connection;
+            private int otherNodeIndex;
+
+            public Context(Node currentNode) {
+                this(currentNode, 0, currentNode.getWeightToppedTo3());
+            }
+
+            private Context(Node currentNode, int otherNodeIndex, int currentWeight) {
+                this.currentNode = currentNode;
+                this.otherNodeIndex = otherNodeIndex;
+                this.connexionWeight = currentWeight;
+            }
+
+            public Node getCurrentNode() {
+                return currentNode;
+            }
+
+            public int getConnexionWeight() {
+                return connexionWeight;
+            }
+
+            public int getOtherNodeIndex() {
+                return otherNodeIndex;
+            }
+
+            public void setCurrentState(Connection connection, int otherNodeIndex, int connexionWeight) {
+                this.connection = connection;
+                this.otherNodeIndex = otherNodeIndex;
+                this.connexionWeight = connexionWeight;
+            }
         }
     }
 
