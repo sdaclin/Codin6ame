@@ -1,6 +1,7 @@
 package fr.sdaclin.codin9ame.hard.APUImprovementPhase;
 
 import java.util.*;
+import java.util.function.Predicate;
 
 /**
  * The machines are gaining ground. Time to show them what we're really made of...
@@ -45,6 +46,8 @@ class Player {
             List<Context> contexts = new ArrayList<>();
 
             Context context = new Context(0);
+            final int[] idx = new int[1];
+            idx[0] = 0;
             mainLoop:
             while (unconnectedNodes.size() > 0) {
                 // Take current connexion, make an assumption that is ok with bounded nodes, go to next connexion
@@ -54,11 +57,18 @@ class Player {
                 }
                 final Connection currentConnexion = connexions.get(context.getConnectionIdx());
                 // Verify if this connexion doesn't intersect previous connections
-                if (connexions.stream()
+                if (currentConnexion.getThickness() > 0 && connexions.stream()
                         .limit(context.getConnectionIdx())
+                        .filter(connection -> connection.getThickness() > 0)
                         .reduce(Boolean.FALSE,
-                                (result, connexion) -> result || intersects(connexion, currentConnexion),
-                                (res1, res2) -> res1 || res2)) {
+                                (result, connexion) -> {
+                                    boolean intersects = intersects(connexion, currentConnexion);
+                                    return result || intersects;
+                                },
+                                (res1, res2) -> res1 || res2
+                        )) {
+                    ArrayList<Connection> allConnections = new ArrayList<>(connexions);
+                    allConnections.add(currentConnexion);
                     context = revertAndGetNextContext(contexts);
                 }
                 for (int thicknessToTry = context.getConnectionThickness(); thicknessToTry >= 0; thicknessToTry--) {
@@ -122,42 +132,56 @@ class Player {
             List<Connection> connections = solve();
             // Write an action using System.out.println()
             // To debug: System.err.println("Debug messages...");
+            printOutConnexions(connections, false);
+        }
+
+        private void printOutConnexions(List<Connection> connections, boolean forTesting) {
             connections.stream().filter(connection -> connection.getThickness() > 0).forEach(connection -> {
-                System.out.println(connection.getA().getCoordinate().getX() + " " + connection.getA().getCoordinate().getY() + " " + connection.getB().getCoordinate().getX() + " " + connection.getB().getCoordinate().getY() + " " + connection.getThickness());
+                if (forTesting) {
+                    System.out.println("System.out.println(\"" + connection.getA().getCoordinate().getX() + " " + connection.getA().getCoordinate().getY() + " " + connection.getB().getCoordinate().getX() + " " + connection.getB().getCoordinate().getY() + " " + connection.getThickness() + "\");");
+                } else {
+                    System.out.println(connection.getA().getCoordinate().getX() + " " + connection.getA().getCoordinate().getY() + " " + connection.getB().getCoordinate().getX() + " " + connection.getB().getCoordinate().getY() + " " + connection.getThickness());
+                }
             });
         }
 
-        boolean intersects(Line lineA, Line lineB) {
-            int p0_y = lineA.getCoordinateOfA().getY();
-            int p0_x = lineA.getCoordinateOfA().getX();
-            int p1_x = lineA.getCoordinateOfB().getX();
-            int p1_y = lineA.getCoordinateOfB().getY();
-            int p2_x = lineB.getCoordinateOfA().getX();
-            int p2_y = lineB.getCoordinateOfA().getY();
-            int p3_x = lineB.getCoordinateOfB().getX();
-            int p3_y = lineB.getCoordinateOfB().getY();
-
-            int s1_x, s1_y, s2_x, s2_y;
-            s1_x = p1_x - p0_x;
-            s1_y = p1_y - p0_y;
-            s2_x = p3_x - p2_x;
-            s2_y = p3_y - p2_y;
-
-            int s, t;
-            s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y);
-            t = (s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y);
-
-            return s >= 0 && s <= 1 && t >= 0 && t <= 1;
+        static Map<Line,Map<Line,Boolean>> intersectionCache = new HashMap<>();
+        static boolean intersects(Line lineA, Line lineB) {
+            if (lineA.getOrientation() == lineB.getOrientation()) {
+                return false;
+            }
+            //System.out.println("intersects" + lineA+" "+lineB);
+            intersectionCache.computeIfAbsent(lineA,(line -> new HashMap<>()));
+            return intersectionCache.get(lineA).computeIfAbsent(lineB, (line -> {
+                //System.out.println("from cache" + lineA+" "+lineB);
+                int middle;
+                int coordinateBound1;
+                int coordinateBound2;
+                if (lineA.getOrientation() == Line.Orientation.HORIZONTAL) {
+                    middle = lineA.getCoordinateOfA().getY();
+                    coordinateBound1 = lineB.getCoordinateOfA().getY();
+                    coordinateBound2 = lineB.getCoordinateOfB().getY();
+                } else {
+                    middle = lineA.getCoordinateOfA().getX();
+                    coordinateBound1 = lineB.getCoordinateOfA().getX();
+                    coordinateBound2 = lineB.getCoordinateOfB().getX();
+                }
+                return middle != coordinateBound1 && middle != coordinateBound2 && ((middle > coordinateBound1) ? coordinateBound2 > middle : coordinateBound2 < middle);
+            }));
         }
 
 
-        private interface Line {
+        public interface Line {
+            enum Orientation {HORIZONTAL, VERTICAL}
+
             Coordinate getCoordinateOfA();
 
             Coordinate getCoordinateOfB();
+
+            Orientation getOrientation();
         }
 
-        private static class Coordinate {
+        static class Coordinate {
             private final int x;
             private final int y;
 
@@ -186,11 +210,13 @@ class Player {
         static class Connection implements Line {
             private final Node nodeA;
             private final Node nodeB;
+            private final Orientation orientation;
             private int thickness = 0;
 
             public Connection(Node nodeA, Node nodeB) {
                 this.nodeA = nodeA;
                 this.nodeB = nodeB;
+                this.orientation = (nodeA.getCoordinate().getX() == nodeB.getCoordinate().getX()) ? Orientation.VERTICAL : Orientation.HORIZONTAL;
             }
 
             public Node getA() {
@@ -227,13 +253,19 @@ class Player {
             public Coordinate getCoordinateOfB() {
                 return nodeB.coordinate;
             }
+
+            @Override
+            public Orientation getOrientation() {
+                return orientation;
+            }
         }
 
         static class Node {
             public void addToWeight(List<Node> unconnectedNodes, int toApply) {
                 assert toApply != 0;
                 if (this.weight == 0) {
-                    unconnectedNodes.add(0, this);
+                    assert toApply > 0;
+                    unconnectedNodes.add(this);
                 }
                 this.weight += toApply;
                 if (this.weight == 0) {
@@ -304,11 +336,11 @@ class Player {
 
         private class Context {
             private int connectionIdx;
-            private int connectionWeight;
+            private int connectionThickness;
 
             public Context(int connectionIdx) {
                 this.connectionIdx = connectionIdx;
-                this.connectionWeight = 2;
+                this.connectionThickness = 2;
             }
 
             public int getConnectionIdx() {
@@ -316,11 +348,11 @@ class Player {
             }
 
             public int getConnectionThickness() {
-                return connectionWeight;
+                return connectionThickness;
             }
 
             public void setConnectionThickness(int connectionWeight) {
-                this.connectionWeight = connectionWeight;
+                this.connectionThickness = connectionWeight;
             }
         }
     }
