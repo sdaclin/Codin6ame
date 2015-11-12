@@ -1,7 +1,8 @@
 package fr.sdaclin.codin9ame.hard.APUImprovementPhase;
 
 import java.util.*;
-import java.util.function.Predicate;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * The machines are gaining ground. Time to show them what we're really made of...
@@ -34,7 +35,9 @@ class Player {
      */
     static class Solver {
         private final List<Node> nodes;
-        private final List<Connection> connexions = new ArrayList<>();
+        private final List<Connection> toProcessConnections = new ArrayList<>();
+        private final List<Connection> processedConnections = new ArrayList<>();
+        private Map<Integer, List<Node>> byUnprocessedConnectionNodes;
         private List<Node> unconnectedNodes;
 
         Solver(Configuration configuration) {
@@ -43,22 +46,27 @@ class Player {
 
         List<Connection> solve() {
             unconnectedNodes = new ArrayList<>(nodes);
+            byUnprocessedConnectionNodes = nodes.stream().collect(Collectors.groupingBy(new Function<Node, Integer>() {
+
+                @Override
+                public Integer apply(Node node) {
+                    return ((int) node.connections.stream().filter(connection -> !connection.isProcessed()).count());
+                }
+            }));
+
+            // Good way to start :
+            // 1 nodes with only 1 connexion
+            // nodes with 2 connexions and weight of 4 ( 2 connexions of 2)
+
             List<Context> contexts = new ArrayList<>();
 
-            Context context = new Context(0);
-            final int[] idx = new int[1];
-            idx[0] = 0;
+            Context context = new Context(toProcessConnections.remove(0));
             mainLoop:
             while (unconnectedNodes.size() > 0) {
                 // Take current connexion, make an assumption that is ok with bounded nodes, go to next connexion
-                if (context.getConnectionIdx() == connexions.size()) {
-                    // Wrong path need to revert
-                    context = revertAndGetNextContext(contexts);
-                }
-                final Connection currentConnexion = connexions.get(context.getConnectionIdx());
+                final Connection currentConnexion = context.getConnection();
                 // Verify if this connexion doesn't intersect previous connections
-                if (currentConnexion.getThickness() > 0 && connexions.stream()
-                        .limit(context.getConnectionIdx())
+                if (currentConnexion.getThickness() > 0 && processedConnections.stream()
                         .filter(connection -> connection.getThickness() > 0)
                         .reduce(Boolean.FALSE,
                                 (result, connexion) -> {
@@ -67,8 +75,6 @@ class Player {
                                 },
                                 (res1, res2) -> res1 || res2
                         )) {
-                    ArrayList<Connection> allConnections = new ArrayList<>(connexions);
-                    allConnections.add(currentConnexion);
                     context = revertAndGetNextContext(contexts);
                 }
                 for (int thicknessToTry = context.getConnectionThickness(); thicknessToTry >= 0; thicknessToTry--) {
@@ -76,22 +82,30 @@ class Player {
                         continue;
                     }
                     currentConnexion.setThicknessAndApplyToNode(unconnectedNodes, thicknessToTry);
+                    processedConnections.add(currentConnexion);
                     context.setConnectionThickness(thicknessToTry);
                     contexts.add(context);
-                    context = new Context(context.getConnectionIdx() + 1);
+                    if (toProcessConnections.size() == 0) {
+                        // Wrong path need to revert
+                        context = revertAndGetNextContext(contexts);
+                        continue mainLoop;
+                    }
+                    context = new Context(toProcessConnections.remove(0));
                     continue mainLoop;
                 }
                 // Wrong path need to revert
                 context = revertAndGetNextContext(contexts);
             }
-            return connexions;
+            return processedConnections;
         }
 
         private Context revertAndGetNextContext(List<Context> contexts) {
             Context context;
             do {
                 context = contexts.remove(contexts.size() - 1);
-                connexions.get(context.getConnectionIdx()).setThicknessAndApplyToNode(unconnectedNodes, context.getConnectionThickness());
+                Connection revertedConnection = processedConnections.remove(processedConnections.size() - 1);
+                revertedConnection.setThicknessAndApplyToNode(unconnectedNodes, context.getConnectionThickness());
+                toProcessConnections.add(0, revertedConnection);
             } while (context.getConnectionThickness() == 0);
             // Set context to next (lower) connectionThickness
             context.setConnectionThickness(context.getConnectionThickness() - 1);
@@ -113,13 +127,13 @@ class Player {
                     Node node = new Node(new Coordinate(j, i), Integer.parseInt(cellContent, 10));
                     if (previousNodeInRow != null) {
                         Connection connectionTo = node.connect(previousNodeInRow);
-                        connexions.add(connectionTo);
+                        toProcessConnections.add(connectionTo);
                     }
                     previousNodeInRow = node;
                     Node previousNodeInCol;
                     if ((previousNodeInCol = nodeByCol.get(j)) != null) {
                         Connection connectFrom = previousNodeInCol.connect(node);
-                        connexions.add(connectFrom);
+                        toProcessConnections.add(connectFrom);
                     }
                     nodeByCol.put(j, node);
                     nodes.add(node);
@@ -135,7 +149,7 @@ class Player {
             printOutConnexions(connections, false);
         }
 
-        private void printOutConnexions(List<Connection> connections, boolean forTesting) {
+        void printOutConnexions(List<Connection> connections, boolean forTesting) {
             connections.stream().filter(connection -> connection.getThickness() > 0).forEach(connection -> {
                 if (forTesting) {
                     System.out.println("System.out.println(\"" + connection.getA().getCoordinate().getX() + " " + connection.getA().getCoordinate().getY() + " " + connection.getB().getCoordinate().getX() + " " + connection.getB().getCoordinate().getY() + " " + connection.getThickness() + "\");");
@@ -212,6 +226,7 @@ class Player {
             private final Node nodeB;
             private final Orientation orientation;
             private int thickness = 0;
+            private boolean processed = false;
 
             public Connection(Node nodeA, Node nodeB) {
                 this.nodeA = nodeA;
@@ -258,9 +273,26 @@ class Player {
             public Orientation getOrientation() {
                 return orientation;
             }
+
+            public boolean isProcessed() {
+                return processed;
+            }
+
+            public void setProcessed(boolean processed) {
+                this.processed = processed;
+            }
         }
 
         static class Node {
+            private final Coordinate coordinate;
+            private int weight;
+
+            private List<Connection> connections = new ArrayList<>();
+            public Node(Coordinate coordinate, int weight) {
+                this.coordinate = coordinate;
+                this.weight = weight;
+            }
+
             public void addToWeight(List<Node> unconnectedNodes, int toApply) {
                 assert toApply != 0;
                 if (this.weight == 0) {
@@ -273,54 +305,12 @@ class Player {
                 }
             }
 
-            public enum Axe {X, Y}
-
-            private final Coordinate coordinate;
-
-            private int weight;
-            private List<Connection> connections = new ArrayList<>();
-
-            public Node(Coordinate coordinate, int weight) {
-                this.coordinate = coordinate;
-                this.weight = weight;
-            }
-
-            public Connection getConnection(int idx) {
-                return this.connections.get(idx);
-            }
-
             public int getWeight() {
                 return weight;
             }
 
-            /**
-             * Remove connexionThickness to this node weight and return true if this node weight is 0
-             *
-             * @param connexionThickness
-             * @return
-             */
-            public boolean minus(int connexionThickness) {
-                this.weight -= connexionThickness;
-                return this.weight == 0;
-            }
-
-            public void plus(int connexionThickness) {
-                this.weight += connexionThickness;
-            }
-
             public Coordinate getCoordinate() {
                 return coordinate;
-            }
-
-            public int distance(Node.Axe axe, Node otherNode) {
-                switch (axe) {
-                    case X:
-                        return otherNode.coordinate.getX() - this.coordinate.getX();
-                    case Y:
-                        return otherNode.coordinate.getY() - this.coordinate.getY();
-                    default:
-                        throw new RuntimeException("Unsupported exception");
-                }
             }
 
             public Connection connect(Node otherNode) {
@@ -329,22 +319,23 @@ class Player {
                 otherNode.connections.add(connection);
                 return connection;
             }
-        }
 
-        private class IntersectionException extends Exception {
+            public int computeNBOfUnprocessedConnections() {
+                return ((int) connections.stream().filter((connection) -> !connection.isProcessed()).count());
+            }
         }
 
         private class Context {
-            private int connectionIdx;
+            private Connection connection;
             private int connectionThickness;
 
-            public Context(int connectionIdx) {
-                this.connectionIdx = connectionIdx;
+            public Context(Connection connection) {
+                this.connection = connection;
                 this.connectionThickness = 2;
             }
 
-            public int getConnectionIdx() {
-                return connectionIdx;
+            public Connection getConnection() {
+                return connection;
             }
 
             public int getConnectionThickness() {

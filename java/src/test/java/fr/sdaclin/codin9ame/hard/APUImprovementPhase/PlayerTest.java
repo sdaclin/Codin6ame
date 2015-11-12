@@ -1,7 +1,10 @@
 package fr.sdaclin.codin9ame.hard.APUImprovementPhase;
 
+import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
+
+import java.util.List;
 
 public class PlayerTest {
 
@@ -32,15 +35,70 @@ public class PlayerTest {
             ".3..52.3\n" +
             ".2.17..4\n" +
             ".4..51.2";
+    private static final String LVL_11 = "5 14\n" +
+            "22221\n" +
+            "2....\n" +
+            "2....\n" +
+            "2....\n" +
+            "2....\n" +
+            "22321\n" +
+            ".....\n" +
+            ".....\n" +
+            "22321\n" +
+            "2....\n" +
+            "2....\n" +
+            "2.131\n" +
+            "2..2.\n" +
+            "2222.";
+    private static final String LVL_12 = "5 5\n" +
+            ".12..\n" +
+            ".2421\n" +
+            "24442\n" +
+            "1242.\n" +
+            "..21.";
+    private static final String LVL_13 = "23 23\n" +
+            "3..2.2..1....3........4\n" +
+            ".2..1....2.6.........2.\n" +
+            "..3..6....3............\n" +
+            ".......2........1..3.3.\n" +
+            "..1.............3..3...\n" +
+            ".......3..3............\n" +
+            ".3...8.....8.........3.\n" +
+            "6.5.1...........1..3...\n" +
+            "............2..6.31..2.\n" +
+            "..4..4.................\n" +
+            "5..........7...7...3.3.\n" +
+            ".2..3..3..3............\n" +
+            "......2..2...1.6...3...\n" +
+            "....2..................\n" +
+            ".4....5...3............\n" +
+            ".................2.3...\n" +
+            ".......3.3..2.44....1..\n" +
+            "3...1.3.2.3............\n" +
+            ".2.....3...6.........5.\n" +
+            "................1......\n" +
+            ".1.......3.6.2...2...4.\n" +
+            "5...............3.....3\n" +
+            "4...................4.2";
 
     @DataProvider(name = "fromWebSiteDataProvider")
     public Object[][] createData() {
         return new Object[][]{
-                //{LVL_1},
-                //{LVL_3},
-                //{LVL_4},
-                //{LVL_6},
+                {LVL_1},
+                {LVL_3},
+                {LVL_4},
+                {LVL_6},
                 {LVL_8},
+                {LVL_11},
+                {LVL_12},
+                {LVL_13},
+        };
+    }
+
+    @DataProvider(name = "justOneFromWebSiteDataProvider")
+    public Object[][] createJustOneData() {
+        return new Object[][]{
+                {LVL_13}
         };
     }
 
@@ -48,8 +106,18 @@ public class PlayerTest {
     public void testAllLevelFromWebsite(String lvlConfig) throws Exception {
         Player.Configuration configuration = Player.Configuration.forDump(lvlConfig);
         Player.Solver solver = new Player.Solver(configuration);
-        //List<Player.Solver.Connection> connections = solver.solve();
-        solver.printResult();
+        List<Player.Solver.Connection> connections = solver.solve();
+        Assert.assertNotEquals(connections.size(), 0);
+        solver.printOutConnexions(connections, false);
+    }
+
+    @Test(dataProvider = "justOneFromWebSiteDataProvider")
+    public void testJustOneLevelFromWebsite(String lvlConfig) throws Exception {
+        Player.Configuration configuration = Player.Configuration.forDump(lvlConfig);
+        Player.Solver solver = new Player.Solver(configuration);
+        List<Player.Solver.Connection> connections = solver.solve();
+        Assert.assertNotEquals(connections.size(), 0);
+        solver.printOutConnexions(connections, false);
     }
 
     class SimpleLine implements Player.Solver.Line {
@@ -85,7 +153,6 @@ public class PlayerTest {
                 {new SimpleLine(0,0,2,0),new SimpleLine(1,0,1,1),false},
                 {new SimpleLine(1,0,1,2),new SimpleLine(0,1,2,1),true},
                 {new SimpleLine(0,1,2,1),new SimpleLine(1,0,1,2),true}
-
         };
     }
 
