@@ -98,21 +98,21 @@ public class PlayerTest {
     @DataProvider(name = "justOneFromWebSiteDataProvider")
     public Object[][] createJustOneData() {
         return new Object[][]{
-                {LVL_13}
+                {LVL_6}
         };
     }
 
     @Test(dataProvider = "fromWebSiteDataProvider")
     public void testAllLevelFromWebsite(String lvlConfig) throws Exception {
-        Player.Configuration configuration = Player.Configuration.forDump(lvlConfig);
-        Player.Solver solver = new Player.Solver(configuration);
-        List<Player.Solver.Connection> connections = solver.solve();
-        Assert.assertNotEquals(connections.size(), 0);
-        solver.printOutConnexions(connections, false);
+        launchTest(lvlConfig);
     }
 
     @Test(dataProvider = "justOneFromWebSiteDataProvider")
     public void testJustOneLevelFromWebsite(String lvlConfig) throws Exception {
+        launchTest(lvlConfig);
+    }
+
+    private void launchTest(String lvlConfig) {
         Player.Configuration configuration = Player.Configuration.forDump(lvlConfig);
         Player.Solver solver = new Player.Solver(configuration);
         List<Player.Solver.Connection> connections = solver.solve();
