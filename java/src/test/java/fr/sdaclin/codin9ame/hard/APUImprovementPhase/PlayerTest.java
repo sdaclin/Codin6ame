@@ -4,7 +4,7 @@ import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
-import java.util.List;
+import java.util.Set;
 
 public class PlayerTest {
 
@@ -98,7 +98,7 @@ public class PlayerTest {
     @DataProvider(name = "justOneFromWebSiteDataProvider")
     public Object[][] createJustOneData() {
         return new Object[][]{
-                {LVL_6}
+                {LVL_3}
         };
     }
 
@@ -115,7 +115,7 @@ public class PlayerTest {
     private void launchTest(String lvlConfig) {
         Player.Configuration configuration = Player.Configuration.forDump(lvlConfig);
         Player.Solver solver = new Player.Solver(configuration);
-        List<Player.Solver.Connection> connections = solver.solve();
+        Set<Player.Solver.Connection> connections = solver.solve();
         Assert.assertNotEquals(connections.size(), 0);
         solver.printOutConnexions(connections, false);
     }

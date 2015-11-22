@@ -42,7 +42,8 @@ class Player {
             initNodesAndConnections(configuration);
         }
 
-        List<Connection> solve() {
+        Set<Connection> solve() {
+            List<Context> history = new ArrayList<>();
             Context context = null;
 
             // Good way to start :
@@ -52,37 +53,49 @@ class Player {
 
             boolean everythingIsProcessed = false;
             do {
-                Connection toProcessConnection;
-                if (context != null) {
-                    toProcessConnection = context.getConnection();
-                } else {
-                    try {
-                        // Take one random connection that is not processed and make an assumption of its potential thickness between 0 to 2
-                        toProcessConnection = connections.stream().filter(isNotProcessed).findFirst().orElseThrow(() -> new RuntimeException("EveryThingIsDone"));
-                        context = new Context(toProcessConnection);
-                    } catch (RuntimeException re) {
+                // Get or create current context with a connection to process
+                if (context == null) {
+                    // Take one random connection that is not processed
+                    Optional<Connection> optionalConnection = connections.stream().filter(isNotProcessed).findFirst();
+                    if (optionalConnection.isPresent()) {
+                        context = new Context(optionalConnection.get(), nodes, connections);
+                    } else {
                         everythingIsProcessed = true;
                         continue;
                     }
                 }
 
-                try {
-                    for (int thickness = context.getConnectionThickness(); thickness >= 0; thickness--) {
-                        setWeight(toProcessConnection, thickness);
+                // Make an assumption of its potential thickness between 0 to 2
+                // Todo add in context to compute only once
+                int maxThicknessForThisConnectionNodes = context.getConnection().getA().getWeight() > context.getConnection().getB().getWeight() ? context.getConnection().getB().getWeight() : context.getConnection().getA().getWeight();
+                for (int thickness = context.getConnectionThickness(); thickness >= 0; thickness--) {
+                    if (thickness > maxThicknessForThisConnectionNodes) {
+                        continue;
                     }
-                } catch (CrossingConnectionException cce) {
-                    // Don't need to try other thickness, when this connexion cross another one, the only thickness possible is 0
-                    setWeight(toProcessConnection,0);
+                    try {
+                        setWeight(context.getConnection(), thickness);
+                    } catch (CrossingConnectionException cce) {
+                        // Don't need to try other thickness, when this connexion cross another one, the only thickness possible is 0
+                        thickness = 1; // Set to 1 and continue in order to try next time directly with 0
+                        continue;
+                    }
+                    context.setConnectionThickness(thickness);
+                    break;
+                    // Todo Maybe verify if weight > 0 that it remains unprocessed connections on one node ?
                 }
 
+                // Save current assumption in history
+                history.add(context);
+                context = null;
+                autoSetSureThicknesses(nodes);
             } while (!everythingIsProcessed);
 
-            return new ArrayList<>();
+            return connections;
         }
 
         private void autoSetSureThicknesses(Set<Node> nodes) {
-            nodes.stream().parallel()//
-                    .filter(node -> node.getWeight() == 1 || node.getWeight() % 2 == 0) // Matches 1,2,4,6,8
+            nodes.stream()//
+                    .filter(node -> !node.isFullyConnected && (node.getWeight() == 1 || node.getWeight() % 2 == 0)) // Matches 1,2,4,6,8
                     .forEach(node -> {
                         Set<Connection> currentNodeUnProcessedConnection = node.getConnections().stream().filter(isNotProcessed).collect(Collectors.toSet());
                         if (currentNodeUnProcessedConnection.size() == 0) {
@@ -94,11 +107,9 @@ class Player {
                                 Connection connection = currentNodeUnProcessedConnection.stream().findFirst().get();
                                 assert (node.getWeight() == 1 || node.getWeight() == 2);
                                 setWeight(connection, node.getWeight());
-                            }
-                            if (currentNodeUnProcessedConnection.size() == node.getWeight() * 2) {
-                                currentNodeUnProcessedConnection.forEach(connection -> {
-                                    setWeight(connection, 2);
-                                });
+                            } else if (currentNodeUnProcessedConnection.size() == node.getWeight() / 2) {
+                                assert node.getWeight() != 0;
+                                currentNodeUnProcessedConnection.forEach(connection -> setWeight(connection, 2));
                             }
                         } catch (CrossingConnectionException e) {
                             e.printStackTrace();
@@ -150,13 +161,13 @@ class Player {
         }
 
         void printResult() {
-            List<Connection> connections = solve();
+            Set<Connection> connections = solve();
             // Write an action using System.out.println()
             // To debug: System.err.println("Debug messages...");
             printOutConnexions(connections, false);
         }
 
-        void printOutConnexions(List<Connection> connections, boolean forTesting) {
+        void printOutConnexions(Set<Connection> connections, boolean forTesting) {
             connections.stream().filter(connection -> connection.getThickness() > 0).forEach(connection -> {
                 if (forTesting) {
                     System.out.println("System.out.println(\"" + connection.getA().getCoordinate().getX() + " " + connection.getA().getCoordinate().getY() + " " + connection.getB().getCoordinate().getX() + " " + connection.getB().getCoordinate().getY() + " " + connection.getThickness() + "\");");
@@ -368,10 +379,14 @@ class Player {
 
         private class Context {
             private Connection connection;
+            private final Set<Node> nodes;
+            private final Set<Connection> connections;
             private int connectionThickness;
 
-            public Context(Connection connection) {
+            public Context(Connection connection, Set<Node> nodes, Set<Connection> connections) {
                 this.connection = connection;
+                this.nodes = new HashSet<>(nodes);
+                this.connections = new HashSet<>(connections);
                 this.connectionThickness = 2;
             }
 
@@ -385,6 +400,14 @@ class Player {
 
             public void setConnectionThickness(int connectionWeight) {
                 this.connectionThickness = connectionWeight;
+            }
+
+            public Set<Node> getNodes() {
+                return nodes;
+            }
+
+            public Set<Connection> getConnections() {
+                return connections;
             }
         }
 
