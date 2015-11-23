@@ -35,20 +35,18 @@ class Player {
      */
     static class Solver {
         private static final Predicate<Connection> isNotProcessed = (connection -> !connection.isProcessed());
-        private final Set<Node> nodes = new HashSet<>();
-        private final Set<Connection> connections = new HashSet<>();
+        private final List<Node> nodes = new LinkedList<>();
+        private final List<Connection> connections = new LinkedList<>();
 
         Solver(Configuration configuration) {
             initNodesAndConnections(configuration);
         }
 
-        Set<Connection> solve() {
+        List<Connection> solve() {
             List<Context> history = new ArrayList<>();
             Context context = null;
 
-            // Good way to start :
-            // 1 nodes with only 1 connexion
-            // nodes with 2 connexions and weight of 4 ( 2 connexions of 2)
+            // Auto connect nodes where there are no assumption to be made
             autoSetSureThicknesses(nodes);
 
             boolean everythingIsProcessed = false;
@@ -93,29 +91,46 @@ class Player {
             return connections;
         }
 
-        private void autoSetSureThicknesses(Set<Node> nodes) {
-            nodes.stream()//
-                    .filter(node -> !node.isFullyConnected && (node.getWeight() == 1 || node.getWeight() % 2 == 0)) // Matches 1,2,4,6,8
-                    .forEach(node -> {
-                        Set<Connection> currentNodeUnProcessedConnection = node.getConnections().stream().filter(isNotProcessed).collect(Collectors.toSet());
-                        if (currentNodeUnProcessedConnection.size() == 0) {
-                            return;
-                        }
-
-                        try {
-                            if (currentNodeUnProcessedConnection.size() == 1) {
-                                Connection connection = currentNodeUnProcessedConnection.stream().findFirst().get();
-                                assert (node.getWeight() == 1 || node.getWeight() == 2);
-                                setWeight(connection, node.getWeight());
-                            } else if (currentNodeUnProcessedConnection.size() == node.getWeight() / 2) {
-                                assert node.getWeight() != 0;
-                                currentNodeUnProcessedConnection.forEach(connection -> setWeight(connection, 2));
+        /**
+         * Cycling each node, find the ones that have a weight that directly match the number of connections and set them
+         *      1 nodes with only 1 connexion
+         *      nodes with 2 connexions and weight of 4 ( 2 connexions of 2)
+         *
+         * When all this nodes are auto wired, some connection are bounded to a node that have a weight of 0 so this connection should be flagged as processed
+         * @param nodes
+         */
+        private void autoSetSureThicknesses(List<Node> nodes) {
+            final boolean[] oneConnectionHasBeenProcessed = {false};
+            do {
+                oneConnectionHasBeenProcessed[0] = false;
+                nodes.stream()//
+                        .filter(node -> !node.isFullyConnected && (node.getWeight() == 1 || node.getWeight() % 2 == 0)) // Matches 1,2,4,6,8
+                        .forEach(node -> {
+                            Set<Connection> currentNodeUnProcessedConnection = node.getConnections().stream().filter(isNotProcessed).collect(Collectors.toSet());
+                            if (currentNodeUnProcessedConnection.size() == 0) {
+                                return;
                             }
-                        } catch (CrossingConnectionException e) {
-                            e.printStackTrace();
-                        }
 
-                    });
+                            try {
+                                if (currentNodeUnProcessedConnection.size() == 1) {
+                                    Connection connection = currentNodeUnProcessedConnection.stream().findFirst().get();
+                                    assert (node.getWeight() == 1 || node.getWeight() == 2);
+                                    setWeight(connection, node.getWeight());
+                                    oneConnectionHasBeenProcessed[0] = true;
+                                } else if (currentNodeUnProcessedConnection.size() == node.getWeight() / 2) {
+                                    assert node.getWeight() != 0;
+                                    currentNodeUnProcessedConnection.forEach(connection -> setWeight(connection, 2));
+                                    oneConnectionHasBeenProcessed[0] = true;
+                                }
+                            } catch (CrossingConnectionException e) {
+                                e.printStackTrace();
+                            }
+                        });
+            }while(oneConnectionHasBeenProcessed[0]);
+
+            connections.stream()//
+                    .filter(connection -> (!connection.isProcessed() && (connection.getA().isFullyConnected || connection.getB().isFullyConnected)))//
+                    .forEach(connection1 -> connection1.setProcessed(true));
         }
 
         private void setWeight(Connection connection, int weight) throws CrossingConnectionException {
@@ -161,13 +176,13 @@ class Player {
         }
 
         void printResult() {
-            Set<Connection> connections = solve();
+            List<Connection> connections = solve();
             // Write an action using System.out.println()
             // To debug: System.err.println("Debug messages...");
             printOutConnexions(connections, false);
         }
 
-        void printOutConnexions(Set<Connection> connections, boolean forTesting) {
+        void printOutConnexions(List<Connection> connections, boolean forTesting) {
             connections.stream().filter(connection -> connection.getThickness() > 0).forEach(connection -> {
                 if (forTesting) {
                     System.out.println("System.out.println(\"" + connection.getA().getCoordinate().getX() + " " + connection.getA().getCoordinate().getY() + " " + connection.getB().getCoordinate().getX() + " " + connection.getB().getCoordinate().getY() + " " + connection.getThickness() + "\");");
@@ -352,10 +367,6 @@ class Player {
                 return connection;
             }
 
-            public int computeNBOfUnprocessedConnections() {
-                return getUnprocessedConnections().size();
-            }
-
             public Set<Connection> getConnections() {
                 return connections;
             }
@@ -379,14 +390,14 @@ class Player {
 
         private class Context {
             private Connection connection;
-            private final Set<Node> nodes;
-            private final Set<Connection> connections;
+            private final List<Node> nodes;
+            private final List<Connection> connections;
             private int connectionThickness;
 
-            public Context(Connection connection, Set<Node> nodes, Set<Connection> connections) {
+            public Context(Connection connection, List<Node> nodes, List<Connection> connections) {
                 this.connection = connection;
-                this.nodes = new HashSet<>(nodes);
-                this.connections = new HashSet<>(connections);
+                this.nodes = new LinkedList<>(nodes);
+                this.connections = new LinkedList<>(connections);
                 this.connectionThickness = 2;
             }
 
@@ -402,11 +413,11 @@ class Player {
                 this.connectionThickness = connectionWeight;
             }
 
-            public Set<Node> getNodes() {
+            public List<Node> getNodes() {
                 return nodes;
             }
 
-            public Set<Connection> getConnections() {
+            public List<Connection> getConnections() {
                 return connections;
             }
         }

@@ -4,6 +4,7 @@ import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
+import java.util.List;
 import java.util.Set;
 
 public class PlayerTest {
@@ -98,7 +99,7 @@ public class PlayerTest {
     @DataProvider(name = "justOneFromWebSiteDataProvider")
     public Object[][] createJustOneData() {
         return new Object[][]{
-                {LVL_3}
+                {LVL_8}
         };
     }
 
@@ -115,7 +116,7 @@ public class PlayerTest {
     private void launchTest(String lvlConfig) {
         Player.Configuration configuration = Player.Configuration.forDump(lvlConfig);
         Player.Solver solver = new Player.Solver(configuration);
-        Set<Player.Solver.Connection> connections = solver.solve();
+        List<Player.Solver.Connection> connections = solver.solve();
         Assert.assertNotEquals(connections.size(), 0);
         solver.printOutConnexions(connections, false);
     }
@@ -125,9 +126,9 @@ public class PlayerTest {
         private final Player.Solver.Coordinate b;
         private final Orientation orientation;
 
-        SimpleLine(int ax, int ay, int bx, int by){
-            this.a = new Player.Solver.Coordinate(ax,ay);
-            this.b = new Player.Solver.Coordinate(bx,by);
+        SimpleLine(int ax, int ay, int bx, int by) {
+            this.a = new Player.Solver.Coordinate(ax, ay);
+            this.b = new Player.Solver.Coordinate(bx, by);
             this.orientation = (ax == bx ? Orientation.VERTICAL : Orientation.HORIZONTAL);
         }
 
@@ -147,17 +148,17 @@ public class PlayerTest {
         }
     }
 
-    @DataProvider(name="intersectionsDataProvider")
-    public Object[][] createDataForIntersection(){
+    @DataProvider(name = "intersectionsDataProvider")
+    public Object[][] createDataForIntersection() {
         return new Object[][]{
-                {new SimpleLine(0,0,2,0),new SimpleLine(1,0,1,1),false},
-                {new SimpleLine(1,0,1,2),new SimpleLine(0,1,2,1),true},
-                {new SimpleLine(0,1,2,1),new SimpleLine(1,0,1,2),true}
+                {new SimpleLine(0, 0, 2, 0), new SimpleLine(1, 0, 1, 1), false},
+                {new SimpleLine(1, 0, 1, 2), new SimpleLine(0, 1, 2, 1), true},
+                {new SimpleLine(0, 1, 2, 1), new SimpleLine(1, 0, 1, 2), true}
         };
     }
 
     @Test(dataProvider = "intersectionsDataProvider")
-    public void testIntersects(Player.Solver.Line lineA, Player.Solver.Line lineB, Boolean expectation){
-        assert(Player.Solver.intersects(lineA,lineB)==expectation);
+    public void testIntersects(Player.Solver.Line lineA, Player.Solver.Line lineB, Boolean expectation) {
+        assert (Player.Solver.intersects(lineA, lineB) == expectation);
     }
 }
