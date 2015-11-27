@@ -7,6 +7,8 @@ import org.testng.annotations.Test;
 import java.util.List;
 import java.util.Set;
 
+import static junit.framework.Assert.*;
+
 public class PlayerTest {
 
     private static final String LVL_1 = "3 3\n" +
@@ -146,6 +148,15 @@ public class PlayerTest {
         public Orientation getOrientation() {
             return orientation;
         }
+
+        @Override
+        public String toString() {
+            return "{" +
+                    "" + a +
+                    ", " + b +
+                    ", " + orientation +
+                    '}';
+        }
     }
 
     @DataProvider(name = "intersectionsDataProvider")
@@ -153,12 +164,14 @@ public class PlayerTest {
         return new Object[][]{
                 {new SimpleLine(0, 0, 2, 0), new SimpleLine(1, 0, 1, 1), false},
                 {new SimpleLine(1, 0, 1, 2), new SimpleLine(0, 1, 2, 1), true},
-                {new SimpleLine(0, 1, 2, 1), new SimpleLine(1, 0, 1, 2), true}
+                {new SimpleLine(0, 1, 2, 1), new SimpleLine(1, 0, 1, 2), true},
+                {new SimpleLine(0, 0, 0, 3), new SimpleLine(4, 2, 2, 2), false},
+                {new SimpleLine(4, 2, 2, 2), new SimpleLine(0, 0, 0, 3), false}
         };
     }
 
     @Test(dataProvider = "intersectionsDataProvider")
     public void testIntersects(Player.Solver.Line lineA, Player.Solver.Line lineB, Boolean expectation) {
-        assert (Player.Solver.intersects(lineA, lineB) == expectation);
+        assertEquals(lineA + " " + lineB +" ["+expectation+"]",(boolean) expectation,Player.Solver.intersects(lineA, lineB));
     }
 }
