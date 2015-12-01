@@ -59,6 +59,9 @@ class Player {
                         context = new Context(optionalConnection.get());
                     } else {
                         if (nodes.stream().filter(n -> n.state == Node.State.PARTIALLY_CONNECTED).count() > 0) {
+                            if (history.history.size()==20){
+                                printOutConnexions(history.history.stream().map(c->c.connection).collect(Collectors.toList()), true);
+                            }
                             context = history.revert();
                             continue;
                         }
@@ -66,6 +69,8 @@ class Player {
                         continue;
                     }
                 }
+
+
 
                 // Make an assumption of its potential thickness between 0 to 2
                 // Todo add in context to compute only once
@@ -76,14 +81,15 @@ class Player {
                         continue;
                     }
                     try {
-                        setWeight(context.getConnection(), thickness);
+                        context.setConnectionThickness(thickness);
+                        setWeight(history,context);
                     } catch (CrossingConnectionException cce) {
                         // Don't need to try other thickness, when this connexion cross another one, the only thickness possible is 0
                         thickness = 0;
-                        setWeight(context.getConnection(), thickness);
+                        context.setConnectionThickness(thickness);
+                        setWeight(history,context);
                     }
                     processRelativeConnections(history, context.getConnection());
-                    context.setConnectionThickness(thickness);
                     oneConnectionHasBeenProcessed = true;
                     break;
                 }
@@ -93,7 +99,6 @@ class Player {
                 }
 
                 // Save current assumption in history
-                history.add(context);
                 context = null;
                 try {
                     autoSetSureThicknesses(nodes, history);
@@ -133,27 +138,26 @@ class Player {
                                         Connection connection = currentNodeUnProcessedConnection.stream().findFirst().get();
                                         assert (node.getWeight() == 1 || node.getWeight() == 2);
                                         try {
-                                            if(node.coordinate.getX()==2 && node.coordinate.getY()==2){
-                                                System.out.println("test");
-                                            }
-                                            setWeight(connection, node.getWeight());
+                                            Context context = new Context(connection, node.getWeight());
+                                            setWeight(history,context);
                                         } catch (CrossingConnectionException e) {
                                             // Todo something to propagate
                                             e.printStackTrace();
+                                            throw e;
                                         }
-                                        history.add(new Context(connection, node.getWeight()));
                                         processRelativeConnections(history, connection);
                                         oneConnectionHasBeenProcessed[0] = true;
                                     } else if (currentNodeUnProcessedConnection.size() == node.getWeight() / 2) {
                                         assert node.getWeight() != 0;
                                         currentNodeUnProcessedConnection.forEach(connection -> {
                                             try {
-                                                setWeight(connection, 2);
+                                                Context context = new Context(connection, 2);
+                                                setWeight(history,context);
                                             } catch (CrossingConnectionException e) {
                                                 // Todo something to propagate
                                                 e.printStackTrace();
+                                                throw e;
                                             }
-                                            history.add(new Context(connection, 2));
                                             processRelativeConnections(history, connection);
                                         });
                                         oneConnectionHasBeenProcessed[0] = true;
@@ -177,10 +181,14 @@ class Player {
 
         private void processRelativeConnections(History history, Connection connection) {
             if (connection.getA().getState() == Node.State.FULLY_CONNECTED) {
-                connection.getA().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> setWeight(c, 0));
+                connection.getA().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> {
+                    setWeight(history, new Context(c, 0));
+                });
             }
             if (connection.getB().getState() == Node.State.FULLY_CONNECTED) {
-                connection.getB().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> setWeight(c, 0));
+                connection.getB().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> {
+                    setWeight(history, new Context(c, 0));
+                });
             }
         }
 
@@ -188,12 +196,13 @@ class Player {
             connection.resetThickness();
         }
 
-        private void setWeight(Connection connection, int weight) throws CrossingConnectionException {
-            if (weight > 0 && connections.stream().filter(Connection::isProcessed).filter(c -> c.getThickness() > 0).filter(c -> intersects(connection, c)).findFirst().isPresent()) {
+        private void setWeight(History history, Context context) throws CrossingConnectionException {
+            if (context.getConnectionThickness() > 0 && connections.stream().filter(Connection::isProcessed).filter(c -> c.getThickness() > 0).filter(c -> intersects(context.getConnection(), c)).findFirst().isPresent()) {
                 throw new CrossingConnectionException();
             }
             // Todo implement crossing connection exception
-            connection.setThickness(weight);
+            context.getConnection().setThickness(context.getConnectionThickness());
+            history.add(context);
         }
 
         private void initNodesAndConnections(Configuration configuration) {
@@ -226,8 +235,6 @@ class Player {
 
         void printResult() {
             List<Connection> connections = solve();
-            // Write an action using System.out.println()
-            // To debug: System.err.println("Debug messages...");
             printOutConnexions(connections, false);
         }
 
@@ -247,10 +254,8 @@ class Player {
             if (lineA.getOrientation() == lineB.getOrientation()) {
                 return false;
             }
-            //System.out.println("intersects" + lineA+" "+lineB);
             intersectionCache.computeIfAbsent(lineA, (line -> new HashMap<>()));
             return intersectionCache.get(lineA).computeIfAbsent(lineB, (line -> {
-                //System.out.println("from cache" + lineA+" "+lineB);
                 int axeLineA, lBoundLineA, uBoundLineA;
                 int axeLineB, lBoundLineB, uBoundLineB;
                 if (lineA.getOrientation() == Line.Orientation.HORIZONTAL) {
@@ -360,14 +365,6 @@ class Player {
                 processed = false;
             }
 
-            public int computeMaxThickness() {
-                return nodeA.getWeight() < nodeB.getWeight() ? nodeA.getWeight() : nodeB.getWeight();
-            }
-
-            public void revertWeight() {
-
-            }
-
             @Override
             public Coordinate getCoordinateOfA() {
                 return nodeA.coordinate;
@@ -389,6 +386,14 @@ class Player {
 
             public void setProcessed(boolean processed) {
                 this.processed = processed;
+            }
+
+            @Override
+            public String toString() {
+                return "Connection{" +
+                        "nodeA=" + nodeA +
+                        ", nodeB=" + nodeB +
+                        '}';
             }
         }
 
