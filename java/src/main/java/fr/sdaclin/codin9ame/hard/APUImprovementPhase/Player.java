@@ -58,18 +58,28 @@ class Player {
                     if (optionalConnection.isPresent()) {
                         context = new Context(optionalConnection.get());
                     } else {
+                        // Verify that all nodes are fully connected
                         if (nodes.stream().filter(n -> n.state == Node.State.PARTIALLY_CONNECTED).count() > 0) {
-                            if (history.history.size()==20){
-                                printOutConnexions(history.history.stream().map(c->c.connection).collect(Collectors.toList()), true);
-                            }
                             context = history.revert();
                             continue;
                         }
+
+                        // Verify that the graph is fully connected
+                        GraphExplorer<Node> explorer = new GraphExplorer<Node>() {
+                            @Override
+                            public Set<Node> getAdjacent(Node node) {
+                                return node.getConnections().stream().filter(c->c.getThickness()>0).map(connection -> connection.getA() == node ? connection.getB() : connection.getA()).collect(Collectors.toSet());
+                            }
+                        };
+                        if (! (explorer.getNbNodeConnected(nodes.get(0)) == nodes.size())){
+                            context = history.revert();
+                            continue;
+                        }
+
                         everythingIsProcessed = true;
                         continue;
                     }
                 }
-
 
 
                 // Make an assumption of its potential thickness between 0 to 2
@@ -82,12 +92,12 @@ class Player {
                     }
                     try {
                         context.setConnectionThickness(thickness);
-                        setWeight(history,context);
+                        setWeight(history, context);
                     } catch (CrossingConnectionException cce) {
                         // Don't need to try other thickness, when this connexion cross another one, the only thickness possible is 0
                         thickness = 0;
                         context.setConnectionThickness(thickness);
-                        setWeight(history,context);
+                        setWeight(history, context);
                     }
                     processRelativeConnections(history, context.getConnection());
                     oneConnectionHasBeenProcessed = true;
@@ -139,10 +149,10 @@ class Player {
                                         assert (node.getWeight() == 1 || node.getWeight() == 2);
                                         try {
                                             Context context = new Context(connection, node.getWeight());
-                                            setWeight(history,context);
+                                            setWeight(history, context);
                                         } catch (CrossingConnectionException e) {
                                             // Todo something to propagate
-                                            e.printStackTrace();
+                                            //e.printStackTrace();
                                             throw e;
                                         }
                                         processRelativeConnections(history, connection);
@@ -152,10 +162,10 @@ class Player {
                                         currentNodeUnProcessedConnection.forEach(connection -> {
                                             try {
                                                 Context context = new Context(connection, 2);
-                                                setWeight(history,context);
+                                                setWeight(history, context);
                                             } catch (CrossingConnectionException e) {
                                                 // Todo something to propagate
-                                                e.printStackTrace();
+                                                //e.printStackTrace();
                                                 throw e;
                                             }
                                             processRelativeConnections(history, connection);
@@ -164,13 +174,13 @@ class Player {
                                     }
                                 } catch (CrossingConnectionException e) {
                                     // Todo something to propagate
-                                    e.printStackTrace();
+                                    //e.printStackTrace();
                                 }
 
                             });
                 } catch (CrossingConnectionException e) {
                     // Todo something to propagate
-                    e.printStackTrace();
+                    //e.printStackTrace();
                 }
             } while (oneConnectionHasBeenProcessed[0]);
 
@@ -279,8 +289,8 @@ class Player {
                 }
                 return (axeLineA != lBoundLineB && axeLineA != uBoundLineB)
                         && (axeLineB != lBoundLineA && axeLineB != uBoundLineA)
-                        && axeLineA <uBoundLineB && axeLineA > lBoundLineB
-                        && axeLineB <uBoundLineA && axeLineB > lBoundLineA;
+                        && axeLineA < uBoundLineB && axeLineA > lBoundLineB
+                        && axeLineB < uBoundLineA && axeLineB > lBoundLineA;
             }));
         }
 
@@ -517,6 +527,28 @@ class Player {
                     resetWeight(context.getConnection());
                 } while (context.isAutoConnected() || context.connectionThickness == 0);
                 return context;
+            }
+        }
+
+        private abstract class GraphExplorer<T> {
+            private Set<T> visited = new HashSet<>();
+
+            public GraphExplorer() {
+            }
+
+            public abstract Set<T> getAdjacent(T node);
+
+            private void followAndFlag(T currentNode){
+                if (visited.contains(currentNode)){
+                    return;
+                }
+                visited.add(currentNode);
+                getAdjacent(currentNode).stream().forEach(this::followAndFlag);
+            }
+
+            public int getNbNodeConnected(T startingNode){
+                followAndFlag(startingNode);
+                return visited.size();
             }
         }
     }

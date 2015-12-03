@@ -101,7 +101,7 @@ public class PlayerTest {
     @DataProvider(name = "justOneFromWebSiteDataProvider")
     public Object[][] createJustOneData() {
         return new Object[][]{
-                {LVL_8}
+                {LVL_11}
         };
     }
 
