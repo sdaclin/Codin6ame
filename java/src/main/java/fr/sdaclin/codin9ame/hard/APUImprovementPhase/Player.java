@@ -35,11 +35,52 @@ class Player {
      */
     static class Solver {
         private static final Predicate<Connection> isNotProcessed = (connection -> !connection.isProcessed());
+        static Map<Line, Map<Line, Boolean>> intersectionCache = new HashMap<>();
         private final List<Node> nodes = new LinkedList<>();
         private final List<Connection> connections = new LinkedList<>();
 
         Solver(Configuration configuration) {
             initNodesAndConnections(configuration);
+        }
+
+        /**
+         * Ultra crapy implementation ;)
+         * @param lineA
+         * @param lineB
+         * @return true if A intersects B
+         */
+        static boolean intersects(Line lineA, Line lineB) {
+
+            if (lineA.getOrientation() == lineB.getOrientation()) {
+                return false;
+            }
+            intersectionCache.computeIfAbsent(lineA, (line -> new HashMap<>()));
+            return intersectionCache.get(lineA).computeIfAbsent(lineB, (line -> {
+                if (lineA.getOrientation() == Line.Orientation.HORIZONTAL) {
+                    return intersects(lineA.getCoordinateOfA().getY(), lineA.getCoordinateOfA().getX(), lineA.getCoordinateOfB().getX(), lineB.getCoordinateOfA().getX(), lineB.getCoordinateOfA().getY(), lineB.getCoordinateOfB().getY());
+                } else {
+                    return intersects(lineA.getCoordinateOfA().getX(), lineA.getCoordinateOfA().getY(), lineA.getCoordinateOfB().getY(), lineB.getCoordinateOfA().getY(), lineB.getCoordinateOfA().getX(), lineB.getCoordinateOfB().getX());
+                }
+
+            }));
+        }
+
+        /**
+         * When I wrote this only god and I know what I were doing now only him knows
+         */
+        private static Boolean intersects(int axeLineA, int aaY, int abX, int axeLineB, int baY, int bbY) {
+            int lBoundLineA, uBoundLineA;
+            int lBoundLineB, uBoundLineB;
+            lBoundLineA = aaY < abX ? aaY : abX;
+            uBoundLineA = aaY > abX ? aaY : abX;
+            assert lBoundLineA < uBoundLineA;
+            lBoundLineB = baY < bbY ? baY : bbY;
+            uBoundLineB = baY > bbY ? baY : bbY;
+            assert lBoundLineB < uBoundLineB;
+            return (axeLineA != lBoundLineB && axeLineA != uBoundLineB)
+                    && (axeLineB != lBoundLineA && axeLineB != uBoundLineA)
+                    && axeLineA < uBoundLineB && axeLineA > lBoundLineB
+                    && axeLineB < uBoundLineA && axeLineB > lBoundLineA;
         }
 
         List<Connection> solve() {
@@ -68,10 +109,10 @@ class Player {
                         GraphExplorer<Node> explorer = new GraphExplorer<Node>() {
                             @Override
                             public Set<Node> getAdjacent(Node node) {
-                                return node.getConnections().stream().filter(c->c.getThickness()>0).map(connection -> connection.getA() == node ? connection.getB() : connection.getA()).collect(Collectors.toSet());
+                                return node.getConnections().stream().filter(c -> c.getThickness() > 0).map(connection -> connection.getA() == node ? connection.getB() : connection.getA()).collect(Collectors.toSet());
                             }
                         };
-                        if (! (explorer.getNbNodeConnected(nodes.get(0)) == nodes.size())){
+                        if (!(explorer.getNbNodeConnected(nodes.get(0)) == nodes.size())) {
                             context = history.revert();
                             continue;
                         }
@@ -112,7 +153,9 @@ class Player {
                 context = null;
                 try {
                     autoSetSureThicknesses(nodes, history);
-                } catch (CrossingConnectionException cce) {
+                } catch (CrossingConnectionException e) {
+                    context = history.revert();
+                } catch (NotEnoughConnectionLeftToConnect e) {
                     context = history.revert();
                 }
             } while (!everythingIsProcessed);
@@ -122,9 +165,8 @@ class Player {
 
         /**
          * Cycling each node, find the ones that have a weight that directly match the number of connections and set them
-         * 1 nodes with only 1 connexion
-         * nodes with 2 connexions and weight of 4 ( 2 connexions of 2)
-         * <p>
+         * * 1 nodes with only 1 connexion
+         * * nodes with 2 connexions and weight of 4 ( 2 connexions of 2)
          * When all this nodes are auto wired, some connection are bounded to a node that have a weight of 0 so this connection should be flagged as processed
          *
          * @param nodes
@@ -134,59 +176,33 @@ class Player {
             final boolean[] oneConnectionHasBeenProcessed = {false};
             do {
                 oneConnectionHasBeenProcessed[0] = false;
-                try {
-                    nodes.stream()//
-                            .filter(node -> !(node.getState() == Node.State.FULLY_CONNECTED) && (node.getWeight() == 1 || node.getWeight() % 2 == 0)) // Matches 1,2,4,6,8
-                            .forEach(node -> {
-                                Set<Connection> currentNodeUnProcessedConnection = node.getConnections().stream().filter(isNotProcessed).collect(Collectors.toSet());
-                                if (currentNodeUnProcessedConnection.size() == 0) {
-                                    return;
-                                }
 
-                                try {
-                                    if (currentNodeUnProcessedConnection.size() == 1) {
-                                        Connection connection = currentNodeUnProcessedConnection.stream().findFirst().get();
-                                        assert (node.getWeight() == 1 || node.getWeight() == 2);
-                                        try {
-                                            Context context = new Context(connection, node.getWeight());
-                                            setWeight(history, context);
-                                        } catch (CrossingConnectionException e) {
-                                            // Todo something to propagate
-                                            //e.printStackTrace();
-                                            throw e;
-                                        }
-                                        processRelativeConnections(history, connection);
-                                        oneConnectionHasBeenProcessed[0] = true;
-                                    } else if (currentNodeUnProcessedConnection.size() == node.getWeight() / 2) {
-                                        assert node.getWeight() != 0;
-                                        currentNodeUnProcessedConnection.forEach(connection -> {
-                                            try {
-                                                Context context = new Context(connection, 2);
-                                                setWeight(history, context);
-                                            } catch (CrossingConnectionException e) {
-                                                // Todo something to propagate
-                                                //e.printStackTrace();
-                                                throw e;
-                                            }
-                                            processRelativeConnections(history, connection);
-                                        });
-                                        oneConnectionHasBeenProcessed[0] = true;
-                                    }
-                                } catch (CrossingConnectionException e) {
-                                    // Todo something to propagate
-                                    //e.printStackTrace();
-                                }
+                nodes.stream()//
+                        .filter(node -> !(node.getState() == Node.State.FULLY_CONNECTED) && (node.getWeight() == 1 || node.getWeight() % 2 == 0)) // Matches 1,2,4,6,8
+                        .forEach(node -> {
+                            Set<Connection> currentNodeUnProcessedConnection = node.getConnections().stream().filter(isNotProcessed).collect(Collectors.toSet());
+                            if (currentNodeUnProcessedConnection.size() == 0) {
+                                return;
+                            }
 
-                            });
-                } catch (CrossingConnectionException e) {
-                    // Todo something to propagate
-                    //e.printStackTrace();
-                }
+                            if (currentNodeUnProcessedConnection.size() == 1) {
+                                Connection connection = currentNodeUnProcessedConnection.stream().findFirst().get();
+                                Context context = new Context(connection, node.getWeight());
+                                setWeight(history, context);
+                                processRelativeConnections(history, connection);
+                                oneConnectionHasBeenProcessed[0] = true;
+                            } else if (currentNodeUnProcessedConnection.size() == node.getWeight() / 2) {
+                                assert node.getWeight() != 0;
+                                currentNodeUnProcessedConnection.forEach(connection -> {
+                                    Context context = new Context(connection, 2);
+                                    setWeight(history, context);
+                                    processRelativeConnections(history, connection);
+                                });
+                                oneConnectionHasBeenProcessed[0] = true;
+                            }
+                        });
+
             } while (oneConnectionHasBeenProcessed[0]);
-
-//            connections.stream()//
-//                    .filter(connection -> (!connection.isProcessed() && (connection.getA().getState() == Node.State.FULLY_CONNECTED || connection.getB().getState() == Node.State.FULLY_CONNECTED)))//
-//                    .forEach(connection1 -> connection1.setProcessed(true));
         }
 
         private void processRelativeConnections(History history, Connection connection) {
@@ -207,10 +223,15 @@ class Player {
         }
 
         private void setWeight(History history, Context context) throws CrossingConnectionException {
+            // Verify that this weight could be applied to each nodes
+            if (context.getConnection().getA().getWeight() < context.connectionThickness || context.getConnection().getB().getWeight() < context.getConnectionThickness()) {
+                throw new NotEnoughConnectionLeftToConnect();
+            }
+            // Verify that this connection don't cross former connections
             if (context.getConnectionThickness() > 0 && connections.stream().filter(Connection::isProcessed).filter(c -> c.getThickness() > 0).filter(c -> intersects(context.getConnection(), c)).findFirst().isPresent()) {
                 throw new CrossingConnectionException();
             }
-            // Todo implement crossing connection exception
+            assert context.getConnection().getA().initialWeight >= context.getConnectionThickness() && context.getConnection().getB().initialWeight >= context.getConnectionThickness();
             context.getConnection().setThickness(context.getConnectionThickness());
             history.add(context);
         }
@@ -258,51 +279,13 @@ class Player {
             });
         }
 
-        static Map<Line, Map<Line, Boolean>> intersectionCache = new HashMap<>();
-
-        static boolean intersects(Line lineA, Line lineB) {
-            if (lineA.getOrientation() == lineB.getOrientation()) {
-                return false;
-            }
-            intersectionCache.computeIfAbsent(lineA, (line -> new HashMap<>()));
-            return intersectionCache.get(lineA).computeIfAbsent(lineB, (line -> {
-                int axeLineA, lBoundLineA, uBoundLineA;
-                int axeLineB, lBoundLineB, uBoundLineB;
-                if (lineA.getOrientation() == Line.Orientation.HORIZONTAL) {
-                    axeLineA = lineA.getCoordinateOfA().getY();
-                    lBoundLineA = lineA.getCoordinateOfA().getX() < lineA.getCoordinateOfB().getX() ? lineA.getCoordinateOfA().getX() : lineA.getCoordinateOfB().getX();
-                    uBoundLineA = lineA.getCoordinateOfA().getX() > lineA.getCoordinateOfB().getX() ? lineA.getCoordinateOfA().getX() : lineA.getCoordinateOfB().getX();
-                    assert lBoundLineA < uBoundLineA;
-                    axeLineB = lineB.getCoordinateOfA().getX();
-                    lBoundLineB = lineB.getCoordinateOfA().getY() < lineB.getCoordinateOfB().getY() ? lineB.getCoordinateOfA().getY() : lineB.getCoordinateOfB().getY();
-                    uBoundLineB = lineB.getCoordinateOfA().getY() > lineB.getCoordinateOfB().getY() ? lineB.getCoordinateOfA().getY() : lineB.getCoordinateOfB().getY();
-                    assert lBoundLineB < uBoundLineB;
-                } else {
-                    axeLineA = lineA.getCoordinateOfA().getX();
-                    lBoundLineA = lineA.getCoordinateOfA().getY() < lineA.getCoordinateOfB().getY() ? lineA.getCoordinateOfA().getY() : lineA.getCoordinateOfB().getY();
-                    uBoundLineA = lineA.getCoordinateOfA().getY() > lineA.getCoordinateOfB().getY() ? lineA.getCoordinateOfA().getY() : lineA.getCoordinateOfB().getY();
-                    assert lBoundLineA < uBoundLineA;
-                    axeLineB = lineB.getCoordinateOfA().getY();
-                    lBoundLineB = lineB.getCoordinateOfA().getX() < lineB.getCoordinateOfB().getX() ? lineB.getCoordinateOfA().getX() : lineB.getCoordinateOfB().getX();
-                    uBoundLineB = lineB.getCoordinateOfA().getX() > lineB.getCoordinateOfB().getX() ? lineB.getCoordinateOfA().getX() : lineB.getCoordinateOfB().getX();
-                    assert lBoundLineB < uBoundLineB;
-                }
-                return (axeLineA != lBoundLineB && axeLineA != uBoundLineB)
-                        && (axeLineB != lBoundLineA && axeLineB != uBoundLineA)
-                        && axeLineA < uBoundLineB && axeLineA > lBoundLineB
-                        && axeLineB < uBoundLineA && axeLineB > lBoundLineA;
-            }));
-        }
-
-
         public interface Line {
-            enum Orientation {HORIZONTAL, VERTICAL}
-
             Coordinate getCoordinateOfA();
 
             Coordinate getCoordinateOfB();
 
             Orientation getOrientation();
+            enum Orientation {HORIZONTAL, VERTICAL}
         }
 
         static class Coordinate {
@@ -408,13 +391,10 @@ class Player {
         }
 
         static class Node {
-            public enum State {NOT_CONNECTED, PARTIALLY_CONNECTED, FULLY_CONNECTED}
-
             private final Coordinate coordinate;
             private final int initialWeight;
             private State state;
             private int weight;
-
             private Set<Connection> connections = new HashSet<>();
 
             public Node(Coordinate coordinate, int weight) {
@@ -434,6 +414,7 @@ class Player {
             public void changeWeight(int toApply) {
                 assert toApply != 0;
                 this.weight += toApply;
+                assert this.weight >= 0;
                 if (this.weight == initialWeight) {
                     state = State.NOT_CONNECTED;
                 } else if (this.weight == 0) {
@@ -471,6 +452,8 @@ class Player {
                         ", " + state +
                         '}';
             }
+
+            public enum State {NOT_CONNECTED, PARTIALLY_CONNECTED, FULLY_CONNECTED}
         }
 
         /**
@@ -510,10 +493,8 @@ class Player {
             }
         }
 
-        private class CrossingConnectionException extends RuntimeException {
-        }
-
         private class History {
+
             private LinkedList<Context> history = new LinkedList<>();
 
             public void add(Context context) {
@@ -528,28 +509,34 @@ class Player {
                 } while (context.isAutoConnected() || context.connectionThickness == 0);
                 return context;
             }
+
         }
 
         private abstract class GraphExplorer<T> {
-            private Set<T> visited = new HashSet<>();
 
-            public GraphExplorer() {
-            }
+            private Set<T> visited = new HashSet<>();
 
             public abstract Set<T> getAdjacent(T node);
 
-            private void followAndFlag(T currentNode){
-                if (visited.contains(currentNode)){
+            private void followAndFlag(T currentNode) {
+                if (visited.contains(currentNode)) {
                     return;
                 }
                 visited.add(currentNode);
                 getAdjacent(currentNode).stream().forEach(this::followAndFlag);
             }
 
-            public int getNbNodeConnected(T startingNode){
+            public int getNbNodeConnected(T startingNode) {
                 followAndFlag(startingNode);
                 return visited.size();
             }
+
+        }
+
+        private class CrossingConnectionException extends RuntimeException {
+        }
+
+        private class NotEnoughConnectionLeftToConnect extends RuntimeException {
         }
     }
 
