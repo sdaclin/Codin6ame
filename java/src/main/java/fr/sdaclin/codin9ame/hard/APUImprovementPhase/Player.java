@@ -122,9 +122,7 @@ class Player {
                     }
                 }
 
-
                 // Make an assumption of its potential thickness between 0 to 2
-                // Todo add in context to compute only once
                 boolean oneConnectionHasBeenProcessed = false;
                 int maxThicknessForThisConnectionNodes = context.getConnection().getA().getWeight() > context.getConnection().getB().getWeight() ? context.getConnection().getB().getWeight() : context.getConnection().getA().getWeight();
                 for (int thickness = context.getConnectionThickness() - 1; thickness >= 0; thickness--) {
