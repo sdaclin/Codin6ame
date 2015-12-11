@@ -44,9 +44,7 @@ class Player {
         }
 
         /**
-         * Ultra crapy implementation ;)
-         * @param lineA
-         * @param lineB
+         * Ultra crappy implementation ;)
          * @return true if A intersects B
          */
         static boolean intersects(Line lineA, Line lineB) {
@@ -151,9 +149,7 @@ class Player {
                 context = null;
                 try {
                     autoSetSureThicknesses(nodes, history);
-                } catch (CrossingConnectionException e) {
-                    context = history.revert();
-                } catch (NotEnoughConnectionLeftToConnect e) {
+                } catch (CrossingConnectionException | NotEnoughConnectionLeftToConnect e) {
                     context = history.revert();
                 }
             } while (!everythingIsProcessed);
@@ -167,8 +163,8 @@ class Player {
          * * nodes with 2 connexions and weight of 4 ( 2 connexions of 2)
          * When all this nodes are auto wired, some connection are bounded to a node that have a weight of 0 so this connection should be flagged as processed
          *
-         * @param nodes
-         * @param history
+         * @param nodes to process
+         * @param history to register new changes
          */
         private void autoSetSureThicknesses(List<Node> nodes, History history) {
             final boolean[] oneConnectionHasBeenProcessed = {false};
@@ -205,14 +201,10 @@ class Player {
 
         private void processRelativeConnections(History history, Connection connection) {
             if (connection.getA().getState() == Node.State.FULLY_CONNECTED) {
-                connection.getA().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> {
-                    setWeight(history, new Context(c, 0));
-                });
+                connection.getA().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> setWeight(history, new Context(c, 0)));
             }
             if (connection.getB().getState() == Node.State.FULLY_CONNECTED) {
-                connection.getB().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> {
-                    setWeight(history, new Context(c, 0));
-                });
+                connection.getB().getConnections().stream().filter(c -> !c.isProcessed()).forEach(c -> setWeight(history, new Context(c, 0)));
             }
         }
 
@@ -375,10 +367,6 @@ class Player {
                 return processed;
             }
 
-            public void setProcessed(boolean processed) {
-                this.processed = processed;
-            }
-
             @Override
             public String toString() {
                 return "Connection{" +
@@ -436,10 +424,6 @@ class Player {
 
             public Set<Connection> getConnections() {
                 return connections;
-            }
-
-            public Set<Connection> getUnprocessedConnections() {
-                return connections.stream().filter((connection) -> !connection.isProcessed()).collect(Collectors.toSet());
             }
 
             @Override

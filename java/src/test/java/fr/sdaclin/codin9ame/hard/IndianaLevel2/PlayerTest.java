@@ -12,5 +12,6 @@ public class PlayerTest {
                 "0 0 -3 0 0\n" +
                 "2");
         Player.Solver solver = new Player.Solver(configuration);
+        solver.setIndyState(2,0,"TOP");
     }
 }
