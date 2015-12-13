@@ -31,7 +31,7 @@ class Player {
             int XI = in.nextInt();
             int YI = in.nextInt();
             String IndyEntrancePoint = in.next();
-            solver.setIndyState(XI, YI, IndyEntrancePoint);
+            solver.setIndyState(new Coordinate(XI, YI), IndyEntrancePoint);
             in.nextLine();
             int R = in.nextInt(); // the number of rocks currently in the grid.
             in.nextLine();
@@ -40,7 +40,7 @@ class Player {
                 int XR = in.nextInt();
                 int YR = in.nextInt();
                 String RockEntrancePoint = in.next();
-                solver.addRockState(XR, YR, RockEntrancePoint);
+                solver.addRockState(new Coordinate(XR, YR), RockEntrancePoint);
                 in.nextLine();
             }
 
@@ -53,25 +53,39 @@ class Player {
         private final Tunnel tunnel;
         private State indyState;
         private Set<State> rockStates = new HashSet<>();
-        private Solution<Command> solution;
+        private Solution<Command, State> solution;
 
         Solver(Configuration configuration) {
             tunnel = new Tunnel(configuration);
             System.err.println(tunnel);
         }
 
-        public void setIndyState(int x, int y, String sideName) {
-            indyState = new State(x, y, Side.forName(sideName));
+        public void setIndyState(Coordinate coordinate, String sideName) {
+            indyState = new State(coordinate, Side.forName(sideName));
             System.err.println("IndyState: " + indyState);
             if (solution == null) {
                 solution = computeNewRoadMap();
             }
         }
 
-        private Solution<Command> computeNewRoadMap() {
-            Solution<Command> solution = new Solution<Command>();
+        private Solution<Command, State> computeNewRoadMap() {
+            Solution<Command, State> solution = new Solution<Command, State>(indyState) {
+                List<State> states = new ArrayList<>();
+
+                @Override
+                protected State customApply(State state, Command command) {
+                    applyCommand(command);
+                    states.add(state);
+                    return autoMove(state, tunnel);
+                }
+
+                @Override
+                protected State customRevert(State state, Command commandToRevert) {
+                    revertCommand(commandToRevert);
+                    return states.remove(states.size() - 1);
+                }
+            };
             Command currentCommand = null;
-            State currentIndiState = indyState;
 
             boolean wayOutIsFound = false;
             do {
@@ -88,76 +102,71 @@ class Player {
                 }
 
                 try {
-                    applyCommand(currentCommand);
-                    State nextState = autoMove(currentIndiState, tunnel);
+                    solution.apply(currentCommand);
+                    currentCommand = null;
                 } catch (RuntimeException re) {
                     continue; // to try other command
                 }
-                solution.add(currentCommand);
+
+                if (solution.getState().coordinate.equals(tunnel.getExit())) {
+                    wayOutIsFound = true;
+                }
             } while (!wayOutIsFound);
-            return null;
+            return solution;
         }
 
         private void applyCommand(Command currentCommand) {
-            RoomType newType = currentCommand.getRoom().getType().applyRotation(Command.Verb.LEFT);
-            currentCommand.getRoom().setType(newType);
+            applyCommand(currentCommand, false);
         }
 
-        private boolean isValid(State nextState) {
-            return false;
+        private void revertCommand(Command currentCommand) {
+            applyCommand(currentCommand, true);
+        }
+
+        private void applyCommand(Command currentCommand, boolean reverse) {
+            if (currentCommand.getVerb() == Command.Verb.WAIT) {
+                return;
+            }
+            Command.Verb verb = currentCommand.getVerb();
+            if (reverse) {
+                verb = verb == Command.Verb.LEFT ? Command.Verb.RIGHT : Command.Verb.LEFT;
+            }
+            RoomType newType = currentCommand.getRoom().getType().applyRotation(verb);
+            currentCommand.getRoom().setType(newType);
         }
 
         private State autoMove(State currentIndiState, Tunnel tunnel) {
             // In every case indi makes a move
-            Room currentIndiRoom = tunnel.getRoom(currentIndiState);
+            Room currentIndiRoom = tunnel.getRoomAt(currentIndiState.getCoordinate());
             RoomType type = currentIndiRoom.getType();
-            Side outranceSide = outranceSideFor(currentIndiState, type);
+            Side exitSide = exitSideFor(currentIndiState, type);
             State futureState;
-            switch (outranceSide) {
+            switch (exitSide) {
                 case BOTTOM:
-                    futureState = new State(currentIndiState.x, currentIndiState.y + 1, Side.TOP);
+                    futureState = new State(currentIndiState.coordinate.addY(1), Side.TOP);
                     break;
                 case LEFT:
-                    futureState = new State(currentIndiState.x - 1, currentIndiState.y, Side.RIGHT);
+                    futureState = new State(currentIndiState.coordinate.addX(-1), Side.RIGHT);
                     break;
                 case RIGHT:
-                    futureState = new State(currentIndiState.x + 1, currentIndiState.y, Side.LEFT);
+                    futureState = new State(currentIndiState.coordinate.addX(1), Side.LEFT);
                     break;
                 default:
                     throw new IllegalArgumentException("Can't move outside of a room by its top");
             }
-            if (futureState.x < 0 || futureState.x > tunnel.getWidth() || futureState.y > tunnel.getHeight()) {
+            if (futureState.coordinate.x < 0 || futureState.coordinate.x > tunnel.getWidth() || futureState.coordinate.y > tunnel.getHeight()) {
                 throw new CommandMoveIllegal();
             }
             try {
-                outranceSideFor(futureState, tunnel.getRoom(futureState).getType());
+                exitSideFor(futureState, tunnel.getRoomAt(futureState.getCoordinate()).getType());
             } catch (EntranceNotFoundException enfe) {
                 throw new CommandMoveIllegal();
             }
             return futureState;
         }
 
-        private Side outranceSideFor(State currentIndiState, RoomType type) {
+        private Side exitSideFor(State currentIndiState, RoomType type) {
             return Stream.of(type.getPaths()).filter(path -> path.from == currentIndiState.entrancePoint).map(p -> p.to).findFirst().orElseThrow(EntranceNotFoundException::new);
-        }
-
-        private static class Coordinate {
-            private final int widthIdx;
-            private final int heightIdx;
-
-            public Coordinate(int widthIdx, int heightIdx) {
-
-                this.widthIdx = widthIdx;
-                this.heightIdx = heightIdx;
-            }
-
-            public int getWidthIdx() {
-                return widthIdx;
-            }
-
-            public int getHeightIdx() {
-                return heightIdx;
-            }
         }
 
         public class NoMoreCommandToTryException extends RuntimeException {
@@ -201,34 +210,43 @@ class Player {
             rockStates.clear();
         }
 
-        public void addRockState(int xr, int yr, String posr) {
-            rockStates.add(new State(xr, yr, Side.forName(posr)));
+        public void addRockState(Coordinate coordinate, String posr) {
+            rockStates.add(new State(coordinate, Side.forName(posr)));
         }
 
         /**
          * Print one line containing on of three commands: 'X Y LEFT', 'X Y RIGHT' or 'WAIT'
          */
-        public void printNextCommand() {
+        public boolean printNextCommand() {
             Command command = solution.peakNext();
-            System.out.println(command);
+            if (command == null) {
+                return false;
+            }
+            System.out.println(command.toPrint());
+            return true;
         }
 
         class State {
-            private final int x;
-            private final int y;
+            private final Coordinate coordinate;
             private final Side entrancePoint;
 
-            public State(int x, int y, Side entrancePoint) {
-                this.x = x;
-                this.y = y;
+            public State(Coordinate coordinate, Side entrancePoint) {
+                this.coordinate = coordinate;
                 this.entrancePoint = entrancePoint;
+            }
+
+            public Coordinate getCoordinate() {
+                return coordinate;
+            }
+
+            public Side getEntrancePoint() {
+                return entrancePoint;
             }
 
             @Override
             public String toString() {
                 return "State{" +
-                        "x=" + x +
-                        ", y=" + y +
+                        "coordinate=" + coordinate +
                         ", entrancePoint=" + entrancePoint +
                         '}';
             }
@@ -281,11 +299,11 @@ class Player {
             TYPE_6('⊥', Path.LEFT_RIGHT, Path.RIGHT_LEFT),
             TYPE_7('⊢', Path.TOP_BOTTOM, Path.RIGHT_BOTTOM),
             TYPE_8('⊤', Path.LEFT_BOTTOM, Path.RIGHT_BOTTOM),
-            TYPE_9('⊣', Path.RIGHT_BOTTOM, Path.TOP_BOTTOM),
-            TYPE_10('⌊', Path.TOP_LEFT),
-            TYPE_11('⌋', Path.TOP_RIGHT),
-            TYPE_12('⌈', Path.RIGHT_BOTTOM),
-            TYPE_13('⌉', Path.LEFT_BOTTOM);
+            TYPE_9('⊣', Path.LEFT_BOTTOM, Path.TOP_BOTTOM),
+            TYPE_10('↲', Path.TOP_LEFT),
+            TYPE_11('↳', Path.TOP_RIGHT),
+            TYPE_12('⇙', Path.RIGHT_BOTTOM),
+            TYPE_13('⇘', Path.LEFT_BOTTOM);
 
             private final char display;
             private final Path[] paths;
@@ -314,7 +332,7 @@ class Player {
                     case TYPE_5:
                         return TYPE_4;
                     case TYPE_6:
-                        return switchForVerb(verb, TYPE_9,TYPE_7);
+                        return switchForVerb(verb, TYPE_9, TYPE_7);
                     case TYPE_7:
                         return switchForVerb(verb, TYPE_6, TYPE_8);
                     case TYPE_8:
@@ -379,7 +397,7 @@ class Player {
         }
 
         private class Tunnel {
-            private final int exit;
+            private final Coordinate exit;
             private final Room[][] rooms;
             private final int height;
             private final int width;
@@ -396,31 +414,35 @@ class Player {
                     String[] roomTypeId = currentLine.split("\\s");
                     for (int widthIdx = 0; widthIdx < roomTypeId.length; widthIdx++) {
                         currentRoomTypeId = roomTypeId[widthIdx];
-                        fixed = currentRoomTypeId.startsWith("-");
-                        if (fixed) {
-                            currentRoomTypeId = currentRoomTypeId.substring(1);
+                        Room room;
+                        RoomType roomType;
+                        Coordinate coordinate = new Coordinate(widthIdx, heightIdx);
+                        if (currentRoomTypeId.equals("0")) {
+                            fixed = true;
+                            roomType = RoomType.TYPE_0;
+                        } else {
+                            fixed = currentRoomTypeId.startsWith("-");
+                            if (fixed) {
+                                currentRoomTypeId = currentRoomTypeId.substring(1);
+                            }
+                            roomType = RoomType.forIdx(currentRoomTypeId);
                         }
-                        RoomType roomType = RoomType.forIdx(currentRoomTypeId);
-                        Room room = new Room(new Coordinate(widthIdx, heightIdx), roomType, fixed);
+                        room = new Room(coordinate, roomType, fixed);
                         rooms[heightIdx][widthIdx] = room;
                         if (!fixed) {
                             movableRooms.add(room);
                         }
                     }
                 }
-                exit = configuration.getExit();
+                exit = new Coordinate(configuration.getExit(), height - 1);
             }
 
             public ArrayList<Room> getMovableRooms() {
                 return movableRooms;
             }
 
-            public Room getRoom(State indyState) {
-                return rooms[indyState.y][indyState.x];
-            }
-
-            public Room getRoomAt(int x, int y) {
-                return rooms[y][x];
+            public Room getRoomAt(Coordinate coordinate) {
+                return rooms[coordinate.getY()][coordinate.getX()];
             }
 
             public int getHeight() {
@@ -441,6 +463,10 @@ class Player {
                 }
                 return builder.toString();
             }
+
+            public Coordinate getExit() {
+                return exit;
+            }
         }
 
         private static class Command {
@@ -451,17 +477,12 @@ class Player {
                 return room;
             }
 
-            enum Verb {WAIT, LEFT, RIGHT}
-
-
-            public Verb getVerb() {
-                return verb;
-            }
+            enum Verb {WAIT, LEFT, RIGHT;}
 
             Command() {
-                this.room = null;
-                this.verb = Verb.WAIT;
+                this(Verb.WAIT, null);
             }
+
 
             Command(Verb verb, Room room) {
                 this.room = room;
@@ -472,6 +493,10 @@ class Player {
                 this.verb = verb;
             }
 
+            public Verb getVerb() {
+                return verb;
+            }
+
             public Coordinate getCoordinate() {
                 return room.getCoordinate();
             }
@@ -480,28 +505,94 @@ class Player {
             public String toString() {
                 return "Command{" +
                         "verb=" + verb +
-                        ", coordinate=" + room.getCoordinate() +
+                        ((verb != Verb.WAIT) ? (", coordinate=" + room.getCoordinate()) : "") +
                         '}';
+            }
+
+            public String toPrint() {
+                return verb == Verb.WAIT ? verb.toString() : getCoordinate().getX() + " " + getCoordinate().getY() + " " + verb;
             }
         }
 
-        private class Solution<STEP> {
-            List<STEP> commands = new ArrayList<>();
+        private abstract class Solution<STEP, STATE> {
+            List<STEP> steps = new ArrayList<>();
+            private STEP lastStepReverted;
+            private STATE state;
 
-            public STEP peakNext() {
-                return commands.remove(0);
+            public Solution(STATE initialState) {
+                state = initialState;
             }
 
-            public void add(STEP step) {
-                commands.add(step);
+            protected abstract STATE customApply(STATE state, STEP step);
+
+            protected abstract STATE customRevert(STATE state, STEP lastStepReverted);
+
+            public STEP peakNext() {
+                return steps.size() > 0 ? steps.remove(0) : null;
+            }
+
+            public void apply(STEP step) throws IllegalStateException {
+                state = customApply(this.state, step);
+                steps.add(step);
             }
 
             public STEP revert() {
-                return commands.remove(commands.size() - 1);
+                lastStepReverted = steps.remove(steps.size() - 1);
+                state = customRevert(this.state, lastStepReverted);
+                return lastStepReverted;
+            }
+
+            public STATE getState() {
+                return state;
             }
         }
 
 
+    }
+
+    static class Coordinate {
+        private final int x;
+        private final int y;
+
+        public Coordinate(int x, int y) {
+
+            this.x = x;
+            this.y = y;
+        }
+
+        public int getX() {
+            return x;
+        }
+
+        public int getY() {
+            return y;
+        }
+
+        public Coordinate addX(int i) {
+            return new Coordinate(x + i, y);
+        }
+
+        public Coordinate addY(int i) {
+            return new Coordinate(x, y + i);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Coordinate that = (Coordinate) o;
+
+            return x == that.x && y == that.y;
+        }
+
+        @Override
+        public String toString() {
+            return "Coordinate{" +
+                    "x=" + x +
+                    ", y=" + y +
+                    '}';
+        }
     }
 
     /**
