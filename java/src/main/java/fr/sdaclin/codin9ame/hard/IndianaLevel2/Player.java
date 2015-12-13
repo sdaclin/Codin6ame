@@ -108,6 +108,9 @@ class Player {
                     continue; // to try other command
                 }
 
+                System.err.println(solution.getState().getCoordinate());
+                System.err.println(tunnel);
+
                 if (solution.getState().coordinate.equals(tunnel.getExit())) {
                     wayOutIsFound = true;
                 }
@@ -340,13 +343,13 @@ class Player {
                     case TYPE_9:
                         return switchForVerb(verb, TYPE_8, TYPE_6);
                     case TYPE_10:
-                        return switchForVerb(verb, TYPE_11, TYPE_12);
+                        return switchForVerb(verb, TYPE_13, TYPE_11);
                     case TYPE_11:
-                        return switchForVerb(verb, TYPE_13, TYPE_10);
+                        return switchForVerb(verb, TYPE_10, TYPE_12);
                     case TYPE_12:
-                        return switchForVerb(verb, TYPE_10, TYPE_13);
+                        return switchForVerb(verb, TYPE_11, TYPE_13);
                     case TYPE_13:
-                        return switchForVerb(verb, TYPE_12, TYPE_11);
+                        return switchForVerb(verb, TYPE_12, TYPE_10);
                     default:
                         throw new IllegalArgumentException();
                 }
@@ -469,7 +472,7 @@ class Player {
             }
         }
 
-        private static class Command {
+        static class Command {
             private final Verb verb;
             private final Room room;
 
@@ -477,7 +480,7 @@ class Player {
                 return room;
             }
 
-            enum Verb {WAIT, LEFT, RIGHT;}
+            enum Verb {WAIT, LEFT, RIGHT}
 
             Command() {
                 this(Verb.WAIT, null);

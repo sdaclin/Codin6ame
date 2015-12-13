@@ -30,6 +30,14 @@ public class PlayerTest {
         solver.setIndyState(new Player.Coordinate(1, 0), "TOP");
         while (solver.printNextCommand()) {
         }
-        ;
+    }
+
+    @Test
+    public void testRotation() {
+        for (Player.Solver.RoomType roomType : Player.Solver.RoomType.values()) {
+            Player.Solver.RoomType intermediateState = roomType.applyRotation(Player.Solver.Command.Verb.LEFT);
+            Player.Solver.RoomType finalState = intermediateState.applyRotation(Player.Solver.Command.Verb.RIGHT);
+            assert roomType.equals(finalState);
+        }
     }
 }
