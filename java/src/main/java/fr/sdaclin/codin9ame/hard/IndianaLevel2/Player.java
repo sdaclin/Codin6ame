@@ -75,8 +75,15 @@ class Player {
                 @Override
                 protected State customApply(State state, Command command) {
                     applyCommand(command);
+                    State newState;
+                    try {
+                        newState = autoMove(state, tunnel);
+                    }catch (Exception e){
+                        revertCommand(command);
+                        throw e;
+                    }
                     states.add(state);
-                    return autoMove(state, tunnel);
+                    return newState;
                 }
 
                 @Override
